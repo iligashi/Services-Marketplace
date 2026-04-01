@@ -1,0 +1,217 @@
+const db = require('../config/db');
+const { AppError } = require('../middleware/error.middleware');
+const { paginate, paginationMeta } = require('../utils/pagination');
+
+exports.create = async (req, res, next) => {
+  try {
+    const { title, description, category_id, budget, location_lat, location_lng, location_address, deadline } = req.body;
+
+    const photos = req.files ? req.files.map((f) => `/uploads/${f.filename}`) : [];
+
+    const [result] = await db.query(
+      `INSERT INTO jobs (customer_id, category_id, title, description, budget, location_lat, location_lng, location_address, photos, deadline)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, category_id || null, title, description, budget || null, location_lat || null, location_lng || null, location_address || null, JSON.stringify(photos), deadline || null]
+    );
+
+    res.status(201).json({ message: 'Job posted', job_id: result.insertId });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getAll = async (req, res, next) => {
+  try {
+    const { category, status, lat, lng, radius, search, page, limit } = req.query;
+
+    let where = 'WHERE 1=1';
+    const params = [];
+
+    if (category) {
+      where += ' AND c.slug = ?';
+      params.push(category);
+    }
+    if (status) {
+      where += ' AND j.status = ?';
+      params.push(status);
+    }
+    if (search) {
+      where += ' AND (j.title LIKE ? OR j.description LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    // Geolocation filter using Haversine formula
+    let distanceSelect = '';
+    let distanceOrder = '';
+    if (lat && lng) {
+      const r = parseFloat(radius) || 25;
+      distanceSelect = `, (6371 * acos(cos(radians(?)) * cos(radians(j.location_lat)) * cos(radians(j.location_lng) - radians(?)) + sin(radians(?)) * sin(radians(j.location_lat)))) AS distance`;
+      params.unshift(parseFloat(lat), parseFloat(lng), parseFloat(lat));
+      where += ' AND j.location_lat IS NOT NULL AND j.location_lng IS NOT NULL';
+      where += ` HAVING distance <= ?`;
+      params.push(r);
+      distanceOrder = 'distance ASC,';
+    }
+
+    // Count query
+    const countQuery = `SELECT COUNT(*) as total FROM jobs j LEFT JOIN categories c ON j.category_id = c.id ${where}`;
+    // If using HAVING, count is tricky — wrap in subquery
+    let totalRows;
+    if (lat && lng) {
+      const countParams = [...params];
+      countParams.pop(); // remove radius for count wrapping
+      const [countResult] = await db.query(
+        `SELECT COUNT(*) as total FROM (
+          SELECT j.id ${distanceSelect}
+          FROM jobs j LEFT JOIN categories c ON j.category_id = c.id ${where}
+        ) AS sub`,
+        params
+      );
+      totalRows = countResult[0].total;
+    } else {
+      const [countResult] = await db.query(
+        `SELECT COUNT(*) as total FROM jobs j LEFT JOIN categories c ON j.category_id = c.id ${where}`,
+        params
+      );
+      totalRows = countResult[0].total;
+    }
+
+    const baseQuery = `
+      SELECT j.*, c.name as category_name, c.slug as category_slug,
+             u.name as customer_name, u.avatar_url as customer_avatar
+             ${distanceSelect}
+      FROM jobs j
+      LEFT JOIN categories c ON j.category_id = c.id
+      LEFT JOIN users u ON j.customer_id = u.id
+      ${where}
+      ORDER BY ${distanceOrder} j.created_at DESC
+    `;
+
+    const pag = paginate(baseQuery, { page, limit });
+    const allParams = lat && lng ? [...params, ...params.slice(0, 3), ...pag.values] : [...params, ...pag.values];
+    const [jobs] = await db.query(pag.query, allParams);
+
+    res.json({
+      jobs,
+      pagination: paginationMeta(totalRows, pag.page, pag.limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getById = async (req, res, next) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT j.*, c.name as category_name, c.slug as category_slug,
+              u.name as customer_name, u.avatar_url as customer_avatar, u.phone as customer_phone
+       FROM jobs j
+       LEFT JOIN categories c ON j.category_id = c.id
+       LEFT JOIN users u ON j.customer_id = u.id
+       WHERE j.id = ?`,
+      [req.params.id]
+    );
+
+    if (rows.length === 0) {
+      throw new AppError('Job not found', 404);
+    }
+
+    // Get bid count
+    const [bidCount] = await db.query('SELECT COUNT(*) as count FROM bids WHERE job_id = ?', [req.params.id]);
+
+    const job = rows[0];
+    job.bid_count = bidCount[0].count;
+
+    res.json({ job });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.update = async (req, res, next) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM jobs WHERE id = ? AND customer_id = ?', [req.params.id, req.user.id]);
+    if (rows.length === 0) {
+      throw new AppError('Job not found or unauthorized', 404);
+    }
+    if (rows[0].status !== 'open') {
+      throw new AppError('Can only edit open jobs', 400);
+    }
+
+    const { title, description, category_id, budget, location_lat, location_lng, location_address, deadline } = req.body;
+
+    await db.query(
+      `UPDATE jobs SET
+        title = COALESCE(?, title),
+        description = COALESCE(?, description),
+        category_id = COALESCE(?, category_id),
+        budget = COALESCE(?, budget),
+        location_lat = COALESCE(?, location_lat),
+        location_lng = COALESCE(?, location_lng),
+        location_address = COALESCE(?, location_address),
+        deadline = COALESCE(?, deadline)
+      WHERE id = ?`,
+      [title, description, category_id, budget, location_lat, location_lng, location_address, deadline, req.params.id]
+    );
+
+    res.json({ message: 'Job updated' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.cancel = async (req, res, next) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM jobs WHERE id = ? AND customer_id = ?', [req.params.id, req.user.id]);
+    if (rows.length === 0) {
+      throw new AppError('Job not found or unauthorized', 404);
+    }
+    if (!['open', 'assigned'].includes(rows[0].status)) {
+      throw new AppError('Cannot cancel job in current status', 400);
+    }
+
+    await db.query('UPDATE jobs SET status = ? WHERE id = ?', ['cancelled', req.params.id]);
+    res.json({ message: 'Job cancelled' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getMyJobs = async (req, res, next) => {
+  try {
+    const { status, page, limit } = req.query;
+    let where = 'WHERE j.customer_id = ?';
+    const params = [req.user.id];
+
+    if (status) {
+      where += ' AND j.status = ?';
+      params.push(status);
+    }
+
+    const [countResult] = await db.query(`SELECT COUNT(*) as total FROM jobs j ${where}`, params);
+    const pag = paginate(
+      `SELECT j.*, c.name as category_name,
+              (SELECT COUNT(*) FROM bids WHERE job_id = j.id) as bid_count
+       FROM jobs j LEFT JOIN categories c ON j.category_id = c.id ${where} ORDER BY j.created_at DESC`,
+      { page, limit }
+    );
+
+    const [jobs] = await db.query(pag.query, [...params, ...pag.values]);
+
+    res.json({
+      jobs,
+      pagination: paginationMeta(countResult[0].total, pag.page, pag.limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getCategories = async (req, res, next) => {
+  try {
+    const [categories] = await db.query('SELECT * FROM categories WHERE is_active = TRUE ORDER BY name');
+    res.json({ categories });
+  } catch (err) {
+    next(err);
+  }
+};
