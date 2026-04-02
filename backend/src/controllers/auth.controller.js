@@ -187,3 +187,33 @@ exports.updateAvatar = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.getPublicProfile = async (req, res, next) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT u.id, u.name, u.role, u.avatar_url, u.is_verified, u.created_at,
+              pp.bio, pp.skills, pp.years_experience, pp.id_verified, pp.avg_rating,
+              pp.total_jobs_done, pp.location_address
+       FROM users u
+       LEFT JOIN provider_profiles pp ON u.id = pp.user_id
+       WHERE u.id = ?`,
+      [req.params.id]
+    );
+
+    if (rows.length === 0) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Get reviews
+    const [reviews] = await db.query(
+      `SELECT r.*, u.name as reviewer_name, u.avatar_url as reviewer_avatar
+       FROM reviews r JOIN users u ON r.reviewer_id = u.id
+       WHERE r.reviewee_id = ? ORDER BY r.created_at DESC LIMIT 10`,
+      [req.params.id]
+    );
+
+    res.json({ user: rows[0], reviews });
+  } catch (err) {
+    next(err);
+  }
+};

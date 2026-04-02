@@ -12,5 +12,6 @@ router.post('/logout', authenticate, auth.logout);
 router.get('/profile', authenticate, auth.getProfile);
 router.put('/profile', authenticate, validate(updateProfileSchema), auth.updateProfile);
 router.put('/avatar', authenticate, upload.single('avatar'), auth.updateAvatar);
+router.get('/user/:id', auth.getPublicProfile);
 
 module.exports = router;

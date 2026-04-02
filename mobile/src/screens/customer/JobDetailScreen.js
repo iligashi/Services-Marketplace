@@ -3,103 +3,151 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image } fr
 import { useSelector } from 'react-redux';
 import { getJobById } from '../../api/jobs.api';
 import { confirmCompletion } from '../../api/payments.api';
+import { colors, radius, shadows, typography, statusConfig } from '../../theme';
 
 export default function JobDetailScreen({ route, navigation }) {
   const { jobId } = route.params;
   const [job, setJob] = useState(null);
   const { user } = useSelector((state) => state.auth);
 
-  useEffect(() => {
-    loadJob();
-  }, [jobId]);
+  useEffect(() => { loadJob(); }, [jobId]);
 
   const loadJob = async () => {
-    try {
-      const { data } = await getJobById(jobId);
-      setJob(data.job);
-    } catch (err) {
-      Alert.alert('Error', 'Failed to load job');
-    }
+    try { const { data } = await getJobById(jobId); setJob(data.job); }
+    catch { Alert.alert('Error', 'Failed to load job'); }
   };
 
-  const handleConfirmCompletion = async () => {
-    Alert.alert('Confirm', 'Confirm job is complete and release payment?', [
+  const handleConfirmCompletion = () => {
+    Alert.alert('Confirm Completion', 'This will release payment to the provider. Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Confirm', onPress: async () => {
-          try {
-            await confirmCompletion(jobId);
-            Alert.alert('Success', 'Payment released!');
-            loadJob();
-          } catch (err) {
-            Alert.alert('Error', err.response?.data?.error || 'Failed');
-          }
-        },
-      },
+      { text: 'Yes, release payment', onPress: async () => {
+        try { await confirmCompletion(jobId); Alert.alert('Done!', 'Payment released successfully'); loadJob(); }
+        catch (err) { Alert.alert('Error', err.response?.data?.error || 'Failed'); }
+      }},
     ]);
   };
 
-  if (!job) return <View style={styles.container}><Text>Loading...</Text></View>;
+  if (!job) return (
+    <View style={styles.loadingContainer}>
+      <Text style={styles.loadingText}>Loading job details...</Text>
+    </View>
+  );
 
+  const status = statusConfig[job.status] || statusConfig.open;
   const photos = typeof job.photos === 'string' ? JSON.parse(job.photos) : job.photos || [];
   const isOwner = user?.id === job.customer_id;
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* Status Banner */}
+      <View style={[styles.statusBanner, { backgroundColor: status.bg }]}>
+        <Text style={[styles.statusIcon, { color: status.color }]}>{status.icon}</Text>
+        <Text style={[styles.statusLabel, { color: status.color }]}>{status.label}</Text>
+      </View>
+
+      {/* Title & Category */}
+      <View style={styles.titleSection}>
+        {job.category_name && (
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>{job.category_name}</Text>
+          </View>
+        )}
         <Text style={styles.title}>{job.title}</Text>
-        <View style={[styles.statusBadge, statusColors[job.status]]}>
-          <Text style={styles.statusText}>{job.status.replace('_', ' ').toUpperCase()}</Text>
-        </View>
+        <Text style={styles.postedBy}>
+          Posted by {job.customer_name} {'\u00B7'} {new Date(job.created_at).toLocaleDateString()}
+        </Text>
       </View>
 
-      {job.category_name && <Text style={styles.category}>{job.category_name}</Text>}
+      {/* Key Details Cards */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.detailCards}>
+        {job.budget && (
+          <View style={styles.detailCard}>
+            <Text style={styles.detailCardLabel}>Budget</Text>
+            <Text style={[styles.detailCardValue, { color: colors.accent }]}>${parseFloat(job.budget).toLocaleString()}</Text>
+          </View>
+        )}
+        {job.bid_count !== undefined && (
+          <View style={styles.detailCard}>
+            <Text style={styles.detailCardLabel}>Bids</Text>
+            <Text style={[styles.detailCardValue, { color: colors.primary }]}>{job.bid_count}</Text>
+          </View>
+        )}
+        {job.deadline && (
+          <View style={styles.detailCard}>
+            <Text style={styles.detailCardLabel}>Deadline</Text>
+            <Text style={styles.detailCardValue}>{new Date(job.deadline).toLocaleDateString()}</Text>
+          </View>
+        )}
+      </ScrollView>
 
-      <Text style={styles.description}>{job.description}</Text>
-
-      <View style={styles.detailsRow}>
-        {job.budget && <DetailItem label="Budget" value={`$${job.budget}`} />}
-        {job.deadline && <DetailItem label="Deadline" value={new Date(job.deadline).toLocaleDateString()} />}
-        {job.bid_count !== undefined && <DetailItem label="Bids" value={job.bid_count.toString()} />}
+      {/* Description */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Description</Text>
+        <Text style={styles.description}>{job.description}</Text>
       </View>
 
+      {/* Location */}
       {job.location_address && (
-        <View style={styles.locationRow}>
-          <Text style={styles.locationLabel}>Location: </Text>
-          <Text style={styles.locationValue}>{job.location_address}</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Location</Text>
+          <View style={styles.locationCard}>
+            <Text style={styles.locationPin}>{'\u25CB'}</Text>
+            <Text style={styles.locationText}>{job.location_address}</Text>
+          </View>
         </View>
       )}
 
-      {photos.length > 0 && (
-        <ScrollView horizontal style={styles.photoScroll}>
-          {photos.map((uri, i) => (
-            <Image key={i} source={{ uri: `http://localhost:3000${uri}` }} style={styles.photo} />
-          ))}
-        </ScrollView>
+      {/* Provider Info */}
+      {job.provider_name && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Assigned Provider</Text>
+          <View style={styles.providerCard}>
+            <View style={styles.providerAvatar}>
+              <Text style={styles.providerInitial}>{job.provider_name.charAt(0).toUpperCase()}</Text>
+            </View>
+            <Text style={styles.providerName}>{job.provider_name}</Text>
+          </View>
+        </View>
       )}
 
+      {/* Photos */}
+      {photos.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Photos</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {photos.map((uri, i) => (
+              <Image key={i} source={{ uri: `http://192.168.0.127:3000${uri}` }} style={styles.photo} />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Action Buttons */}
       <View style={styles.actions}>
         {isOwner && job.status === 'open' && (
-          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Bids', { jobId: job.id })}>
-            <Text style={styles.actionBtnText}>View Bids ({job.bid_count})</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('Bids', { jobId: job.id })} activeOpacity={0.8}>
+            <Text style={styles.primaryBtnText}>View Bids ({job.bid_count})</Text>
+          </TouchableOpacity>
+        )}
+
+        {isOwner && ['assigned', 'in_progress'].includes(job.status) && (
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('Chat', { jobId: job.id })} activeOpacity={0.8}>
+            <Text style={styles.secondaryBtnText}>Message Provider</Text>
           </TouchableOpacity>
         )}
 
         {isOwner && job.status === 'in_progress' && (
-          <>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Chat', { jobId: job.id })}>
-              <Text style={styles.actionBtnText}>Chat</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#00b894' }]} onPress={handleConfirmCompletion}>
-              <Text style={styles.actionBtnText}>Confirm & Pay</Text>
-            </TouchableOpacity>
-          </>
+          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={handleConfirmCompletion} activeOpacity={0.8}>
+            <Text style={styles.primaryBtnText}>Confirm Complete & Pay</Text>
+          </TouchableOpacity>
         )}
 
-        {isOwner && job.status === 'completed' && (
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fdcb6e' }]}
-            onPress={() => navigation.navigate('Review', { jobId: job.id, revieweeId: job.provider_id, revieweeName: 'Provider' })}>
-            <Text style={[styles.actionBtnText, { color: '#2d3436' }]}>Leave Review</Text>
+        {isOwner && job.status === 'completed' && job.provider_id && (
+          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.gold }]}
+            onPress={() => navigation.navigate('Review', { jobId: job.id, revieweeId: job.provider_id, revieweeName: job.provider_name || 'Provider' })}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.primaryBtnText, { color: colors.text }]}>Leave a Review</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -107,42 +155,68 @@ export default function JobDetailScreen({ route, navigation }) {
   );
 }
 
-function DetailItem({ label, value }) {
-  return (
-    <View style={styles.detailItem}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
-  );
-}
-
-const statusColors = {
-  open: { backgroundColor: '#dfe6e9' },
-  assigned: { backgroundColor: '#74b9ff' },
-  in_progress: { backgroundColor: '#ffeaa7' },
-  completed: { backgroundColor: '#55efc4' },
-  disputed: { backgroundColor: '#fab1a0' },
-  cancelled: { backgroundColor: '#ff7675' },
-};
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingBottom: 8 },
-  title: { fontSize: 22, fontWeight: 'bold', flex: 1, marginRight: 8 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusText: { fontSize: 11, fontWeight: '700', color: '#2d3436' },
-  category: { paddingHorizontal: 16, fontSize: 14, color: '#0984e3', fontWeight: '500' },
-  description: { padding: 16, fontSize: 15, lineHeight: 22, color: '#2d3436' },
-  detailsRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 16 },
-  detailItem: { backgroundColor: '#fff', padding: 12, borderRadius: 10, minWidth: 90, alignItems: 'center', borderWidth: 1, borderColor: '#dfe6e9' },
-  detailLabel: { fontSize: 12, color: '#636e72', marginBottom: 4 },
-  detailValue: { fontSize: 18, fontWeight: 'bold', color: '#2d3436' },
-  locationRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12 },
-  locationLabel: { fontSize: 14, color: '#636e72' },
-  locationValue: { fontSize: 14, color: '#2d3436', flex: 1 },
-  photoScroll: { paddingHorizontal: 16, marginTop: 12 },
-  photo: { width: 150, height: 150, borderRadius: 10, marginRight: 8 },
-  actions: { padding: 16, gap: 10 },
-  actionBtn: { backgroundColor: '#0984e3', padding: 16, borderRadius: 12, alignItems: 'center' },
-  actionBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  container: { flex: 1, backgroundColor: colors.bg },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
+  loadingText: { ...typography.bodySmall },
+
+  statusBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 10, gap: 6,
+  },
+  statusIcon: { fontSize: 12, fontWeight: '700' },
+  statusLabel: { fontWeight: '700', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  titleSection: { padding: 20 },
+  categoryBadge: { backgroundColor: colors.primaryBg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: radius.full, alignSelf: 'flex-start', marginBottom: 10 },
+  categoryText: { ...typography.caption, color: colors.primary, fontSize: 11 },
+  title: { ...typography.h1, fontSize: 24, marginBottom: 8 },
+  postedBy: { ...typography.bodySmall, fontSize: 13 },
+
+  detailCards: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
+  detailCard: {
+    backgroundColor: colors.white, paddingVertical: 16, paddingHorizontal: 20,
+    borderRadius: radius.lg, minWidth: 110, alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border, ...shadows.sm,
+  },
+  detailCardLabel: { ...typography.caption, marginBottom: 6 },
+  detailCardValue: { fontSize: 22, fontWeight: '800', color: colors.text },
+
+  section: { paddingHorizontal: 20, paddingTop: 24 },
+  sectionTitle: { ...typography.caption, marginBottom: 10 },
+  description: { ...typography.body, lineHeight: 24, color: colors.text },
+
+  locationCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: colors.white, padding: 16, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  locationPin: { fontSize: 18, color: colors.primary },
+  locationText: { ...typography.body, flex: 1 },
+
+  providerCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: colors.white, padding: 16, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  providerAvatar: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center',
+  },
+  providerInitial: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  providerName: { ...typography.h3 },
+
+  photo: { width: 180, height: 140, borderRadius: radius.lg, marginRight: 10 },
+
+  actions: { padding: 20, gap: 12 },
+  primaryBtn: {
+    backgroundColor: colors.primary, paddingVertical: 18,
+    borderRadius: radius.lg, alignItems: 'center', ...shadows.md,
+  },
+  primaryBtnText: { ...typography.button, color: '#fff' },
+  secondaryBtn: {
+    paddingVertical: 18, borderRadius: radius.lg, alignItems: 'center',
+    borderWidth: 1.5, borderColor: colors.primary,
+  },
+  secondaryBtnText: { ...typography.button, color: colors.primary },
 });

@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Services Marketplace",
+    "slug": "services-marketplace",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0984e3"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.marketplace.services"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0984e3"
+      },
+      "package": "com.marketplace.services"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ]
+  }
+}

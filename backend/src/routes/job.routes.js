@@ -10,7 +10,14 @@ router.get('/categories', jobs.getCategories);
 router.get('/', jobs.getAll);
 router.get('/my', authenticate, authorize('customer'), jobs.getMyJobs);
 router.get('/:id', jobs.getById);
-router.post('/', authenticate, authorize('customer'), upload.array('photos', 5), validate(createJobSchema), jobs.create);
+// Accept both JSON and multipart/form-data (for photo uploads)
+const optionalUpload = (req, res, next) => {
+  if (req.is('multipart/form-data')) {
+    return upload.array('photos', 5)(req, res, next);
+  }
+  next();
+};
+router.post('/', authenticate, authorize('customer'), optionalUpload, validate(createJobSchema), jobs.create);
 router.put('/:id', authenticate, authorize('customer'), validate(updateJobSchema), jobs.update);
 router.patch('/:id/cancel', authenticate, authorize('customer'), jobs.cancel);
 
