@@ -34,7 +34,7 @@ export default function EarningsScreen() {
               <Text style={styles.paymentTitle} numberOfLines={1}>{item.job_title}</Text>
               <Text style={styles.paymentDate}>{new Date(item.released_at).toLocaleDateString()}</Text>
             </View>
-            <Text style={styles.paymentAmount}>+${parseFloat(item.provider_payout).toFixed(2)}</Text>
+            <Text style={styles.paymentAmount}>{`+$${parseFloat(item.provider_payout).toFixed(2)}`}</Text>
           </View>
         )}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadEarnings} tintColor={colors.primary} />}
@@ -43,10 +43,10 @@ export default function EarningsScreen() {
             {/* Earnings Hero */}
             <View style={styles.heroCard}>
               <Text style={styles.heroLabel}>Total Earnings</Text>
-              <Text style={styles.heroAmount}>${totalEarnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+              <Text style={styles.heroAmount}>{`$${totalEarnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</Text>
               <Text style={styles.heroSub}>{payments.length} completed payments</Text>
             </View>
-            {payments.length > 0 && <Text style={styles.sectionTitle}>PAYMENT HISTORY</Text>}
+            {payments.length > 0 ? <Text style={styles.sectionTitle}>{'PAYMENT HISTORY'}</Text> : null}
           </View>
         }
         ListEmptyComponent={

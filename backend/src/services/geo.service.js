@@ -26,9 +26,10 @@ async function findNearbyProviders(lat, lng, radiusKm = 25, categorySlug = null)
   return rows;
 }
 
-// Find open jobs near a provider's location
+// Find open jobs near a provider's location (includes jobs without coordinates)
 async function findNearbyJobs(lat, lng, radiusKm = 25) {
-  const [rows] = await db.query(
+  // Get nearby jobs with coordinates
+  const [nearbyRows] = await db.query(
     `SELECT j.*, c.name as category_name,
             (6371 * acos(
               cos(radians(?)) * cos(radians(j.location_lat)) *
@@ -44,7 +45,18 @@ async function findNearbyJobs(lat, lng, radiusKm = 25) {
      ORDER BY j.created_at DESC`,
     [lat, lng, lat, radiusKm]
   );
-  return rows;
+
+  // Also get open jobs without coordinates (so providers always see all available work)
+  const [noGeoRows] = await db.query(
+    `SELECT j.*, c.name as category_name, NULL as distance
+     FROM jobs j
+     LEFT JOIN categories c ON j.category_id = c.id
+     WHERE j.status = 'open'
+       AND (j.location_lat IS NULL OR j.location_lng IS NULL)
+     ORDER BY j.created_at DESC`
+  );
+
+  return [...nearbyRows, ...noGeoRows];
 }
 
 module.exports = { findNearbyProviders, findNearbyJobs };

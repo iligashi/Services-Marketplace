@@ -59,7 +59,15 @@ router.get('/nearby-jobs', async (req, res, next) => {
     );
 
     if (profile.length === 0 || !profile[0].location_lat) {
-      return res.json({ jobs: [], message: 'Set your location to see nearby jobs' });
+      // No location set — return all open jobs instead of empty
+      const [allJobs] = await db.query(
+        `SELECT j.*, c.name as category_name, NULL as distance
+         FROM jobs j
+         LEFT JOIN categories c ON j.category_id = c.id
+         WHERE j.status = 'open'
+         ORDER BY j.created_at DESC`
+      );
+      return res.json({ jobs: allJobs });
     }
 
     const { location_lat, location_lng, service_radius_km } = profile[0];

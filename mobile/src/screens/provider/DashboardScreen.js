@@ -40,8 +40,7 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {/* Rating Card */}
-      {profile && (
+      {profile ? (
         <View style={styles.ratingCard}>
           <View style={styles.ratingMain}>
             <Text style={styles.ratingNumber}>{parseFloat(profile.avg_rating).toFixed(1)}</Text>
@@ -54,9 +53,9 @@ export default function DashboardScreen() {
             </View>
           </View>
         </View>
-      )}
+      ) : null}
 
-      {/* Stats Grid */}
+
       <View style={styles.statsGrid}>
         <View style={[styles.statCard, styles.statCardWide]}>
           <View style={[styles.statIcon, { backgroundColor: colors.accentLight }]}>
@@ -64,7 +63,7 @@ export default function DashboardScreen() {
           </View>
           <View>
             <Text style={styles.statLabel}>Total Earnings</Text>
-            <Text style={[styles.statValue, { color: colors.accent }]}>${parseFloat(stats.total_earnings).toLocaleString()}</Text>
+            <Text style={[styles.statValue, { color: colors.accent }]}>{`$${parseFloat(stats.total_earnings).toLocaleString()}`}</Text>
           </View>
         </View>
 
@@ -74,7 +73,7 @@ export default function DashboardScreen() {
           </View>
           <View>
             <Text style={styles.statLabel}>Pending</Text>
-            <Text style={[styles.statValue, { color: colors.warning }]}>${parseFloat(stats.pending_earnings).toLocaleString()}</Text>
+            <Text style={[styles.statValue, { color: colors.warning }]}>{`$${parseFloat(stats.pending_earnings).toLocaleString()}`}</Text>
           </View>
         </View>
 

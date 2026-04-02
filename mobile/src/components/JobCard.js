@@ -10,19 +10,19 @@ export default function JobCard({ job, onPress, showBidCount, showDistance }) {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          {job.category_name && (
+          {job.category_name ? (
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{job.category_name}</Text>
             </View>
-          )}
+          ) : null}
           <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
             <Text style={[styles.statusDot, { color: status.color }]}>{status.icon}</Text>
             <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
           </View>
         </View>
-        {job.budget && (
-          <Text style={styles.budget}>${parseFloat(job.budget).toLocaleString()}</Text>
-        )}
+        {job.budget ? (
+          <Text style={styles.budget}>{`$${parseFloat(job.budget).toLocaleString()}`}</Text>
+        ) : null}
       </View>
 
       {/* Title & Description */}
@@ -32,27 +32,27 @@ export default function JobCard({ job, onPress, showBidCount, showDistance }) {
       {/* Footer */}
       <View style={styles.footer}>
         <View style={styles.metaRow}>
-          {job.location_address && (
+          {job.location_address ? (
             <View style={styles.metaItem}>
               <Text style={styles.metaIcon}>{'\u25CB'}</Text>
               <Text style={styles.metaText} numberOfLines={1}>{job.location_address}</Text>
             </View>
-          )}
-          {showDistance && job.distance && (
+          ) : null}
+          {showDistance && job.distance ? (
             <View style={styles.metaItem}>
               <Text style={styles.metaIcon}>{'\u2192'}</Text>
-              <Text style={[styles.metaText, { color: colors.primary }]}>{parseFloat(job.distance).toFixed(1)} km</Text>
+              <Text style={[styles.metaText, { color: colors.primary }]}>{`${parseFloat(job.distance).toFixed(1)} km`}</Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         <View style={styles.footerRight}>
-          {showBidCount && job.bid_count !== undefined && (
+          {showBidCount && job.bid_count !== undefined ? (
             <View style={styles.bidBadge}>
-              <Text style={styles.bidCount}>{job.bid_count}</Text>
+              <Text style={styles.bidCount}>{String(job.bid_count)}</Text>
               <Text style={styles.bidLabel}>{job.bid_count === 1 ? 'bid' : 'bids'}</Text>
             </View>
-          )}
+          ) : null}
           <Text style={styles.timeAgo}>{timeAgo(job.created_at)}</Text>
         </View>
       </View>

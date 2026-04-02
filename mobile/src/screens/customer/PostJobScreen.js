@@ -5,7 +5,7 @@ import { fetchCategories } from '../../store/jobSlice';
 import api from '../../api/axios.instance';
 import { colors, radius, shadows, typography } from '../../theme';
 
-export default function PostJobScreen({ navigation }) {
+export default function PostJobScreen() {
   const dispatch = useDispatch();
   const { categories } = useSelector((state) => state.jobs);
   const [title, setTitle] = useState('');
@@ -51,12 +51,10 @@ export default function PostJobScreen({ navigation }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
-      <Text style={styles.pageTitle}>Post a new job</Text>
-      <Text style={styles.pageSubtitle}>Describe what you need done and get bids from local pros</Text>
+      <Text style={styles.pageTitle}>{'Post a new job'}</Text>
+      <Text style={styles.pageSubtitle}>{'Describe what you need done and get bids from local pros'}</Text>
 
-      {/* Category */}
-      <Text style={styles.label}>CATEGORY</Text>
+      <Text style={styles.label}>{'CATEGORY'}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll}>
         {categories.map((cat) => (
           <TouchableOpacity
@@ -72,8 +70,7 @@ export default function PostJobScreen({ navigation }) {
         ))}
       </ScrollView>
 
-      {/* Title */}
-      <Text style={styles.label}>JOB TITLE</Text>
+      <Text style={styles.label}>{'JOB TITLE'}</Text>
       <TextInput
         style={[styles.input, focused === 'title' && styles.inputFocused]}
         placeholder="e.g. Fix leaking kitchen faucet"
@@ -84,11 +81,10 @@ export default function PostJobScreen({ navigation }) {
         onBlur={() => setFocused(null)}
       />
 
-      {/* Description */}
-      <Text style={styles.label}>DESCRIPTION</Text>
+      <Text style={styles.label}>{'DESCRIPTION'}</Text>
       <TextInput
         style={[styles.input, styles.textArea, focused === 'desc' && styles.inputFocused]}
-        placeholder="Describe the job in detail — what needs to be done, any special requirements..."
+        placeholder="Describe the job in detail"
         placeholderTextColor={colors.textTertiary}
         value={description}
         onChangeText={setDescription}
@@ -97,12 +93,11 @@ export default function PostJobScreen({ navigation }) {
         onFocus={() => setFocused('desc')}
         onBlur={() => setFocused(null)}
       />
-      <Text style={styles.charCount}>{description.length}/5000</Text>
+      <Text style={styles.charCount}>{`${description.length}/5000`}</Text>
 
-      {/* Budget */}
-      <Text style={styles.label}>BUDGET (OPTIONAL)</Text>
+      <Text style={styles.label}>{'BUDGET (OPTIONAL)'}</Text>
       <View style={[styles.budgetRow, focused === 'budget' && styles.inputFocused]}>
-        <Text style={styles.currency}>$</Text>
+        <Text style={styles.currency}>{'$'}</Text>
         <TextInput
           style={styles.budgetInput}
           placeholder="0"
@@ -113,11 +108,10 @@ export default function PostJobScreen({ navigation }) {
           onFocus={() => setFocused('budget')}
           onBlur={() => setFocused(null)}
         />
-        <Text style={styles.budgetHint}>USD</Text>
+        <Text style={styles.budgetHint}>{'USD'}</Text>
       </View>
 
-      {/* Location */}
-      <Text style={styles.label}>LOCATION</Text>
+      <Text style={styles.label}>{'LOCATION'}</Text>
       <TextInput
         style={[styles.input, focused === 'addr' && styles.inputFocused]}
         placeholder="Address or neighborhood"
@@ -128,30 +122,28 @@ export default function PostJobScreen({ navigation }) {
         onBlur={() => setFocused(null)}
       />
 
-      {/* Summary */}
-      {title.length >= 5 && (
+      {title.length >= 5 ? (
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Job Summary</Text>
+          <Text style={styles.summaryTitle}>{'Job Summary'}</Text>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Title</Text>
+            <Text style={styles.summaryLabel}>{'Title'}</Text>
             <Text style={styles.summaryValue}>{title}</Text>
           </View>
-          {selectedCat && (
+          {selectedCat ? (
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Category</Text>
+              <Text style={styles.summaryLabel}>{'Category'}</Text>
               <Text style={styles.summaryValue}>{selectedCat.name}</Text>
             </View>
-          )}
-          {budget && (
+          ) : null}
+          {budget ? (
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Budget</Text>
-              <Text style={[styles.summaryValue, { color: colors.accent, fontWeight: '700' }]}>${budget}</Text>
+              <Text style={styles.summaryLabel}>{'Budget'}</Text>
+              <Text style={[styles.summaryValue, { color: colors.accent, fontWeight: '700' }]}>{`$${budget}`}</Text>
             </View>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
 
-      {/* Submit */}
       <TouchableOpacity
         style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
         onPress={handleSubmit}

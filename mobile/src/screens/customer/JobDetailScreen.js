@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image, Platform } from 'react-native';
 import { useSelector } from 'react-redux';
 import { getJobById } from '../../api/jobs.api';
 import { confirmCompletion } from '../../api/payments.api';
 import { colors, radius, shadows, typography, statusConfig } from '../../theme';
+
+const BASE_URL = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://192.168.0.127:3000';
 
 export default function JobDetailScreen({ route, navigation }) {
   const { jobId } = route.params;
@@ -29,7 +31,7 @@ export default function JobDetailScreen({ route, navigation }) {
 
   if (!job) return (
     <View style={styles.loadingContainer}>
-      <Text style={styles.loadingText}>Loading job details...</Text>
+      <Text style={styles.loadingText}>{'Loading job details...'}</Text>
     </View>
   );
 
@@ -39,68 +41,62 @@ export default function JobDetailScreen({ route, navigation }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* Status Banner */}
       <View style={[styles.statusBanner, { backgroundColor: status.bg }]}>
         <Text style={[styles.statusIcon, { color: status.color }]}>{status.icon}</Text>
         <Text style={[styles.statusLabel, { color: status.color }]}>{status.label}</Text>
       </View>
 
-      {/* Title & Category */}
       <View style={styles.titleSection}>
-        {job.category_name && (
+        {job.category_name ? (
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryText}>{job.category_name}</Text>
           </View>
-        )}
+        ) : null}
         <Text style={styles.title}>{job.title}</Text>
         <Text style={styles.postedBy}>
-          Posted by {job.customer_name} {'\u00B7'} {new Date(job.created_at).toLocaleDateString()}
+          {`Posted by ${job.customer_name} \u00B7 ${new Date(job.created_at).toLocaleDateString()}`}
         </Text>
       </View>
 
-      {/* Key Details Cards */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.detailCards}>
-        {job.budget && (
+        {job.budget ? (
           <View style={styles.detailCard}>
-            <Text style={styles.detailCardLabel}>Budget</Text>
-            <Text style={[styles.detailCardValue, { color: colors.accent }]}>${parseFloat(job.budget).toLocaleString()}</Text>
+            <Text style={styles.detailCardLabel}>{'Budget'}</Text>
+            <Text style={[styles.detailCardValue, { color: colors.accent }]}>{`$${parseFloat(job.budget).toLocaleString()}`}</Text>
           </View>
-        )}
-        {job.bid_count !== undefined && (
+        ) : null}
+        {job.bid_count !== undefined ? (
           <View style={styles.detailCard}>
-            <Text style={styles.detailCardLabel}>Bids</Text>
-            <Text style={[styles.detailCardValue, { color: colors.primary }]}>{job.bid_count}</Text>
+            <Text style={styles.detailCardLabel}>{'Bids'}</Text>
+            <Text style={[styles.detailCardValue, { color: colors.primary }]}>{String(job.bid_count)}</Text>
           </View>
-        )}
-        {job.deadline && (
+        ) : null}
+        {job.deadline ? (
           <View style={styles.detailCard}>
-            <Text style={styles.detailCardLabel}>Deadline</Text>
+            <Text style={styles.detailCardLabel}>{'Deadline'}</Text>
             <Text style={styles.detailCardValue}>{new Date(job.deadline).toLocaleDateString()}</Text>
           </View>
-        )}
+        ) : null}
       </ScrollView>
 
-      {/* Description */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Description</Text>
+        <Text style={styles.sectionTitle}>{'Description'}</Text>
         <Text style={styles.description}>{job.description}</Text>
       </View>
 
-      {/* Location */}
-      {job.location_address && (
+      {job.location_address ? (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Location</Text>
+          <Text style={styles.sectionTitle}>{'Location'}</Text>
           <View style={styles.locationCard}>
             <Text style={styles.locationPin}>{'\u25CB'}</Text>
             <Text style={styles.locationText}>{job.location_address}</Text>
           </View>
         </View>
-      )}
+      ) : null}
 
-      {/* Provider Info */}
-      {job.provider_name && (
+      {job.provider_name ? (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Assigned Provider</Text>
+          <Text style={styles.sectionTitle}>{'Assigned Provider'}</Text>
           <View style={styles.providerCard}>
             <View style={styles.providerAvatar}>
               <Text style={styles.providerInitial}>{job.provider_name.charAt(0).toUpperCase()}</Text>
@@ -108,48 +104,46 @@ export default function JobDetailScreen({ route, navigation }) {
             <Text style={styles.providerName}>{job.provider_name}</Text>
           </View>
         </View>
-      )}
+      ) : null}
 
-      {/* Photos */}
-      {photos.length > 0 && (
+      {photos.length > 0 ? (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Photos</Text>
+          <Text style={styles.sectionTitle}>{'Photos'}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {photos.map((uri, i) => (
-              <Image key={i} source={{ uri: `http://192.168.0.127:3000${uri}` }} style={styles.photo} />
+              <Image key={i} source={{ uri: `${BASE_URL}${uri}` }} style={styles.photo} />
             ))}
           </ScrollView>
         </View>
-      )}
+      ) : null}
 
-      {/* Action Buttons */}
       <View style={styles.actions}>
-        {isOwner && job.status === 'open' && (
+        {isOwner && job.status === 'open' ? (
           <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('Bids', { jobId: job.id })} activeOpacity={0.8}>
-            <Text style={styles.primaryBtnText}>View Bids ({job.bid_count})</Text>
+            <Text style={styles.primaryBtnText}>{`View Bids (${job.bid_count})`}</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
 
-        {isOwner && ['assigned', 'in_progress'].includes(job.status) && (
+        {isOwner && ['assigned', 'in_progress'].includes(job.status) ? (
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('Chat', { jobId: job.id })} activeOpacity={0.8}>
-            <Text style={styles.secondaryBtnText}>Message Provider</Text>
+            <Text style={styles.secondaryBtnText}>{'Message Provider'}</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
 
-        {isOwner && job.status === 'in_progress' && (
+        {isOwner && job.status === 'in_progress' ? (
           <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={handleConfirmCompletion} activeOpacity={0.8}>
-            <Text style={styles.primaryBtnText}>Confirm Complete & Pay</Text>
+            <Text style={styles.primaryBtnText}>{'Confirm Complete & Pay'}</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
 
-        {isOwner && job.status === 'completed' && job.provider_id && (
+        {isOwner && job.status === 'completed' && job.provider_id ? (
           <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.gold }]}
             onPress={() => navigation.navigate('Review', { jobId: job.id, revieweeId: job.provider_id, revieweeName: job.provider_name || 'Provider' })}
             activeOpacity={0.8}
           >
-            <Text style={[styles.primaryBtnText, { color: colors.text }]}>Leave a Review</Text>
+            <Text style={[styles.primaryBtnText, { color: colors.text }]}>{'Leave a Review'}</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
     </ScrollView>
   );

@@ -23,55 +23,51 @@ export default function BidCard({ bid, onAccept, onReject }) {
             <StarRating rating={bid.avg_rating || 0} size={12} showValue />
             <View style={styles.statDivider} />
             <Text style={styles.statText}>{bid.total_jobs_done || 0} jobs</Text>
-            {bid.years_experience > 0 && (
+            {bid.years_experience > 0 ? (
               <>
                 <View style={styles.statDivider} />
-                <Text style={styles.statText}>{bid.years_experience}yr exp</Text>
+                <Text style={styles.statText}>{`${bid.years_experience}yr exp`}</Text>
               </>
-            )}
-            {bid.id_verified && (
+            ) : null}
+            {bid.id_verified ? (
               <>
                 <View style={styles.statDivider} />
-                <Text style={[styles.statText, { color: colors.accent }]}>{'\u2713'} Verified</Text>
+                <Text style={[styles.statText, { color: colors.accent }]}>{'\u2713 Verified'}</Text>
               </>
-            )}
+            ) : null}
           </View>
         </View>
         <View style={styles.amountContainer}>
           <Text style={styles.amountLabel}>Bid</Text>
-          <Text style={styles.amount}>${parseFloat(bid.amount).toLocaleString()}</Text>
+          <Text style={styles.amount}>{`$${parseFloat(bid.amount).toLocaleString()}`}</Text>
         </View>
       </View>
 
-      {/* Message */}
-      {bid.message && (
+      {bid.message ? (
         <View style={styles.messageBox}>
           <Text style={styles.message}>{bid.message}</Text>
         </View>
-      )}
+      ) : null}
 
-      {/* Details */}
-      {bid.estimated_hours && (
+      {bid.estimated_hours ? (
         <View style={styles.detailRow}>
           <Text style={styles.detailIcon}>{'\u23F1'}</Text>
-          <Text style={styles.detailText}>Estimated {bid.estimated_hours} hours</Text>
+          <Text style={styles.detailText}>{`Estimated ${bid.estimated_hours} hours`}</Text>
         </View>
-      )}
+      ) : null}
 
-      {/* Actions */}
-      {isPending && (
+      {isPending ? (
         <View style={styles.actions}>
           <TouchableOpacity style={styles.rejectBtn} onPress={onReject} activeOpacity={0.7}>
-            <Text style={styles.rejectText}>Decline</Text>
+            <Text style={styles.rejectText}>{'Decline'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.acceptBtn} onPress={onAccept} activeOpacity={0.8}>
-            <Text style={styles.acceptText}>Accept Bid</Text>
+            <Text style={styles.acceptText}>{'Accept Bid'}</Text>
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
 
-      {/* Status for non-pending */}
-      {!isPending && (
+      {!isPending ? (
         <View style={[
           styles.statusBadge,
           { backgroundColor: bid.status === 'accepted' ? colors.successBg : colors.bgAlt }
@@ -83,7 +79,7 @@ export default function BidCard({ bid, onAccept, onReject }) {
             {bid.status === 'accepted' ? '\u2713 Accepted' : 'Declined'}
           </Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
 }

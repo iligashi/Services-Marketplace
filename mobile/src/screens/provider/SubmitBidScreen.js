@@ -36,27 +36,27 @@ export default function SubmitBidScreen({ route, navigation }) {
       {/* Job Summary */}
       <View style={styles.jobCard}>
         <View style={styles.jobHeader}>
-          {job.category_name && (
+          {job.category_name ? (
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{job.category_name}</Text>
             </View>
-          )}
+          ) : null}
         </View>
         <Text style={styles.jobTitle}>{job.title}</Text>
         <Text style={styles.jobDesc} numberOfLines={3}>{job.description}</Text>
         <View style={styles.jobMeta}>
-          {job.budget && (
+          {job.budget ? (
             <View style={styles.jobMetaItem}>
-              <Text style={styles.jobMetaLabel}>Customer Budget</Text>
-              <Text style={styles.jobMetaValue}>${parseFloat(job.budget).toLocaleString()}</Text>
+              <Text style={styles.jobMetaLabel}>{'Customer Budget'}</Text>
+              <Text style={styles.jobMetaValue}>{`$${parseFloat(job.budget).toLocaleString()}`}</Text>
             </View>
-          )}
-          {job.location_address && (
+          ) : null}
+          {job.location_address ? (
             <View style={styles.jobMetaItem}>
-              <Text style={styles.jobMetaLabel}>Location</Text>
+              <Text style={styles.jobMetaLabel}>{'Location'}</Text>
               <Text style={styles.jobMetaValue}>{job.location_address}</Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -103,27 +103,26 @@ export default function SubmitBidScreen({ route, navigation }) {
         onBlur={() => setFocused(null)}
       />
 
-      {/* Earnings Preview */}
-      {amount && parseFloat(amount) > 0 && (
+      {amount && parseFloat(amount) > 0 ? (
         <View style={styles.earningsCard}>
           <Text style={styles.earningsTitle}>ESTIMATED EARNINGS</Text>
           <View style={styles.earningsRow}>
             <Text style={styles.earningsLabel}>Your bid</Text>
-            <Text style={styles.earningsValue}>${parseFloat(amount).toFixed(2)}</Text>
+            <Text style={styles.earningsValue}>{`$${parseFloat(amount).toFixed(2)}`}</Text>
           </View>
           <View style={styles.earningsRow}>
-            <Text style={styles.earningsLabel}>Platform fee (12%)</Text>
-            <Text style={[styles.earningsValue, { color: colors.error }]}>-${(parseFloat(amount) * 0.12).toFixed(2)}</Text>
+            <Text style={styles.earningsLabel}>{'Platform fee (12%)'}</Text>
+            <Text style={[styles.earningsValue, { color: colors.error }]}>{`-$${(parseFloat(amount) * 0.12).toFixed(2)}`}</Text>
           </View>
           <View style={styles.earningsDivider} />
           <View style={styles.earningsRow}>
             <Text style={[styles.earningsLabel, { fontWeight: '700', color: colors.text }]}>You'll receive</Text>
             <Text style={[styles.earningsValue, { color: colors.accent, fontSize: 20 }]}>
-              ${(parseFloat(amount) * 0.88).toFixed(2)}
+              {`$${(parseFloat(amount) * 0.88).toFixed(2)}`}
             </Text>
           </View>
         </View>
-      )}
+      ) : null}
 
       <TouchableOpacity
         style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
