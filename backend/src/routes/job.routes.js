@@ -20,5 +20,7 @@ const optionalUpload = (req, res, next) => {
 router.post('/', authenticate, authorize('customer'), optionalUpload, validate(createJobSchema), jobs.create);
 router.put('/:id', authenticate, authorize('customer'), validate(updateJobSchema), jobs.update);
 router.patch('/:id/cancel', authenticate, authorize('customer'), jobs.cancel);
+router.patch('/:id/start', authenticate, authorize('provider'), jobs.startWork);
+router.patch('/:id/complete', authenticate, authorize('provider'), jobs.markComplete);
 
 module.exports = router;

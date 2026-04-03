@@ -65,64 +65,70 @@ exports.confirmCompletion = async (req, res, next) => {
   try {
     const { job_id } = req.body;
 
+    // Get job and verify ownership
+    const [jobs] = await db.query(
+      `SELECT j.*, b.provider_id
+       FROM jobs j
+       LEFT JOIN bids b ON j.id = b.job_id AND b.status = 'accepted'
+       WHERE j.id = ? AND j.customer_id = ?`,
+      [job_id, req.user.id]
+    );
+
+    if (jobs.length === 0) {
+      throw new AppError('Job not found or unauthorized', 404);
+    }
+
+    const job = jobs[0];
+    if (!['assigned', 'in_progress'].includes(job.status)) {
+      throw new AppError('Job must be assigned or in progress to complete', 400);
+    }
+
+    // Check if there's a held payment to process via Stripe
     const [payments] = await db.query(
-      `SELECT p.*, j.customer_id, j.status as job_status
-       FROM payments p
-       JOIN jobs j ON p.job_id = j.id
-       WHERE p.job_id = ? AND p.status = 'held'`,
-      [job_id]
+      'SELECT * FROM payments WHERE job_id = ? AND status = ?',
+      [job_id, 'held']
     );
-
-    if (payments.length === 0) {
-      throw new AppError('No held payment found for this job', 404);
-    }
-
-    const payment = payments[0];
-
-    if (payment.customer_id !== req.user.id) {
-      throw new AppError('Only the customer can confirm completion', 403);
-    }
-
-    if (!stripe) {
-      throw new AppError('Payment service not configured', 503);
-    }
-
-    // Capture the payment
-    await stripe.paymentIntents.capture(payment.stripe_payment_intent_id);
-
-    // Get provider's Stripe connected account
-    const [profiles] = await db.query(
-      'SELECT stripe_account_id FROM provider_profiles WHERE user_id = ?',
-      [payment.provider_id]
-    );
-
-    // Transfer to provider if they have a connected account
-    let transferId = null;
-    if (profiles.length > 0 && profiles[0].stripe_account_id) {
-      const transfer = await stripe.transfers.create({
-        amount: Math.round(payment.provider_payout * 100),
-        currency: 'usd',
-        destination: profiles[0].stripe_account_id,
-        metadata: { job_id: job_id.toString() },
-      });
-      transferId = transfer.id;
-    }
 
     const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
 
-      await conn.query(
-        'UPDATE payments SET status = ?, released_at = NOW(), stripe_transfer_id = ? WHERE id = ?',
-        ['released', transferId, payment.id]
-      );
+      if (payments.length > 0 && stripe) {
+        const payment = payments[0];
+        // Capture the Stripe payment
+        await stripe.paymentIntents.capture(payment.stripe_payment_intent_id);
+
+        const [profiles] = await conn.query(
+          'SELECT stripe_account_id FROM provider_profiles WHERE user_id = ?',
+          [payment.provider_id]
+        );
+
+        let transferId = null;
+        if (profiles.length > 0 && profiles[0].stripe_account_id) {
+          const transfer = await stripe.transfers.create({
+            amount: Math.round(payment.provider_payout * 100),
+            currency: 'usd',
+            destination: profiles[0].stripe_account_id,
+            metadata: { job_id: job_id.toString() },
+          });
+          transferId = transfer.id;
+        }
+
+        await conn.query(
+          'UPDATE payments SET status = ?, released_at = NOW(), stripe_transfer_id = ? WHERE id = ?',
+          ['released', transferId, payment.id]
+        );
+      }
+
       await conn.query('UPDATE jobs SET status = ? WHERE id = ?', ['completed', job_id]);
 
       // Increment provider's job count
-      await conn.query(
-        'UPDATE provider_profiles SET total_jobs_done = total_jobs_done + 1 WHERE user_id = ?',
-        [payment.provider_id]
-      );
+      if (job.provider_id) {
+        await conn.query(
+          'UPDATE provider_profiles SET total_jobs_done = total_jobs_done + 1 WHERE user_id = ?',
+          [job.provider_id]
+        );
+      }
 
       await conn.commit();
     } catch (err) {
@@ -132,7 +138,7 @@ exports.confirmCompletion = async (req, res, next) => {
       conn.release();
     }
 
-    res.json({ message: 'Payment released, job completed' });
+    res.json({ message: 'Job completed successfully' });
   } catch (err) {
     next(err);
   }

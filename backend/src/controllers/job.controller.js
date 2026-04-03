@@ -180,6 +180,56 @@ exports.cancel = async (req, res, next) => {
   }
 };
 
+exports.startWork = async (req, res, next) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT j.*, b.provider_id FROM jobs j
+       JOIN bids b ON j.id = b.job_id AND b.status = 'accepted'
+       WHERE j.id = ?`,
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      throw new AppError('Job not found', 404);
+    }
+    if (rows[0].provider_id !== req.user.id) {
+      throw new AppError('Only the assigned provider can start work', 403);
+    }
+    if (rows[0].status !== 'assigned') {
+      throw new AppError('Job must be in assigned status to start work', 400);
+    }
+
+    await db.query('UPDATE jobs SET status = ? WHERE id = ?', ['in_progress', req.params.id]);
+    res.json({ message: 'Work started' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.markComplete = async (req, res, next) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT j.*, b.provider_id FROM jobs j
+       JOIN bids b ON j.id = b.job_id AND b.status = 'accepted'
+       WHERE j.id = ?`,
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      throw new AppError('Job not found', 404);
+    }
+    if (rows[0].provider_id !== req.user.id) {
+      throw new AppError('Only the assigned provider can mark work as complete', 403);
+    }
+    if (!['assigned', 'in_progress'].includes(rows[0].status)) {
+      throw new AppError('Job must be assigned or in progress to mark complete', 400);
+    }
+
+    await db.query('UPDATE jobs SET status = ? WHERE id = ?', ['completed', req.params.id]);
+    res.json({ message: 'Job marked as complete' });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.getMyJobs = async (req, res, next) => {
   try {
     const { status, page, limit } = req.query;

@@ -7,6 +7,8 @@ export const createJob = (formData) => api.post('/jobs', formData, {
 });
 export const updateJob = (id, data) => api.put(`/jobs/${id}`, data);
 export const cancelJob = (id) => api.patch(`/jobs/${id}/cancel`);
+export const startWork = (id) => api.patch(`/jobs/${id}/start`);
+export const markJobComplete = (id) => api.patch(`/jobs/${id}/complete`);
 export const getMyJobs = (params) => api.get('/jobs/my', { params });
 export const getCategories = () => api.get('/jobs/categories');
 

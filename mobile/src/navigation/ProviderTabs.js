@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import BrowseJobsScreen from '../screens/provider/BrowseJobsScreen';
 import SubmitBidScreen from '../screens/provider/SubmitBidScreen';
+import MyBidsScreen from '../screens/provider/MyBidsScreen';
 import EarningsScreen from '../screens/provider/EarningsScreen';
 import DashboardScreen from '../screens/provider/DashboardScreen';
 import ChatScreen from '../screens/shared/ChatScreen';
@@ -35,6 +36,15 @@ function BrowseStack() {
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen name="BrowseJobs" component={BrowseJobsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SubmitBid" component={SubmitBidScreen} options={{ title: 'Submit Bid' }} />
+      <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Messages' }} />
+    </Stack.Navigator>
+  );
+}
+
+function MyBidsStack() {
+  return (
+    <Stack.Navigator screenOptions={screenOptions}>
+      <Stack.Screen name="MyBids" component={MyBidsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Messages' }} />
     </Stack.Navigator>
   );
@@ -73,7 +83,14 @@ export default function ProviderTabs() {
         name="BrowseTab"
         component={BrowseStack}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="B" label="Jobs" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon="B" label="Browse" focused={focused} />,
+        }}
+      />
+      <Tab.Screen
+        name="MyBidsTab"
+        component={MyBidsStack}
+        options={{
+          tabBarIcon: ({ focused }) => <TabIcon icon="J" label="My Bids" focused={focused} />,
         }}
       />
       <Tab.Screen

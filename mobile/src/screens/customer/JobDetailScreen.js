@@ -5,7 +5,7 @@ import { getJobById } from '../../api/jobs.api';
 import { confirmCompletion } from '../../api/payments.api';
 import { colors, radius, shadows, typography, statusConfig } from '../../theme';
 
-const BASE_URL = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://192.168.0.127:3000';
+const BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://192.168.0.127:5000';
 
 export default function JobDetailScreen({ route, navigation }) {
   const { jobId } = route.params;
@@ -19,14 +19,22 @@ export default function JobDetailScreen({ route, navigation }) {
     catch { Alert.alert('Error', 'Failed to load job'); }
   };
 
+  const doConfirmCompletion = async () => {
+    try { await confirmCompletion(jobId); Alert.alert('Done!', 'Payment released successfully'); loadJob(); }
+    catch (err) { Alert.alert('Error', err.response?.data?.error || 'Failed'); }
+  };
+
   const handleConfirmCompletion = () => {
-    Alert.alert('Confirm Completion', 'This will release payment to the provider. Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Yes, release payment', onPress: async () => {
-        try { await confirmCompletion(jobId); Alert.alert('Done!', 'Payment released successfully'); loadJob(); }
-        catch (err) { Alert.alert('Error', err.response?.data?.error || 'Failed'); }
-      }},
-    ]);
+    if (Platform.OS === 'web') {
+      if (window.confirm('This will mark the job as complete and release payment to the provider. Are you sure?')) {
+        doConfirmCompletion();
+      }
+    } else {
+      Alert.alert('Confirm Completion', 'This will release payment to the provider. Are you sure?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes, release payment', onPress: doConfirmCompletion },
+      ]);
+    }
   };
 
   if (!job) return (
@@ -130,7 +138,7 @@ export default function JobDetailScreen({ route, navigation }) {
           </TouchableOpacity>
         ) : null}
 
-        {isOwner && job.status === 'in_progress' ? (
+        {isOwner && ['assigned', 'in_progress'].includes(job.status) ? (
           <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={handleConfirmCompletion} activeOpacity={0.8}>
             <Text style={styles.primaryBtnText}>{'Confirm Complete & Pay'}</Text>
           </TouchableOpacity>

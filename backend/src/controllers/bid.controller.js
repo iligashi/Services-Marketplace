@@ -81,12 +81,24 @@ exports.accept = async (req, res, next) => {
     try {
       await conn.beginTransaction();
 
+      // Re-check job is still open inside the transaction
+      const [jobCheck] = await conn.query('SELECT status FROM jobs WHERE id = ? FOR UPDATE', [bid.job_id]);
+      if (jobCheck.length === 0 || jobCheck[0].status !== 'open') {
+        await conn.rollback();
+        throw new AppError('Job is no longer open', 400);
+      }
+
       // Accept this bid
-      await conn.query('UPDATE bids SET status = ? WHERE id = ?', ['accepted', bidId]);
+      const [acceptResult] = await conn.query('UPDATE bids SET status = ? WHERE id = ?', ['accepted', bidId]);
+      if (acceptResult.affectedRows === 0) {
+        await conn.rollback();
+        throw new AppError('Failed to accept bid', 500);
+      }
+
       // Reject all other bids for this job
       await conn.query('UPDATE bids SET status = ? WHERE job_id = ? AND id != ?', ['rejected', bid.job_id, bidId]);
-      // Update job status
-      await conn.query('UPDATE jobs SET status = ? WHERE id = ?', ['assigned', bid.job_id]);
+      // Update job status and assigned provider
+      await conn.query('UPDATE jobs SET status = ?, provider_id = ? WHERE id = ?', ['assigned', bid.provider_id, bid.job_id]);
 
       await conn.commit();
     } catch (err) {
@@ -96,7 +108,7 @@ exports.accept = async (req, res, next) => {
       conn.release();
     }
 
-    res.json({ message: 'Bid accepted, job assigned' });
+    res.json({ message: 'Bid accepted, job assigned', provider_id: bid.provider_id });
   } catch (err) {
     next(err);
   }

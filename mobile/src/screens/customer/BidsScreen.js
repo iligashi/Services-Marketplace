@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Alert, RefreshControl, Platform } from 'react-native';
 import { getBidsForJob, acceptBid, rejectBid } from '../../api/jobs.api';
 import BidCard from '../../components/BidCard';
 import { colors, typography } from '../../theme';
@@ -18,14 +18,26 @@ export default function BidsScreen({ route }) {
 
   useEffect(() => { loadBids(); }, []);
 
+  const doAccept = async (bidId) => {
+    try {
+      await acceptBid(bidId);
+      Alert.alert('Bid Accepted!', 'The provider has been notified.');
+      loadBids();
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to accept bid');
+    }
+  };
+
   const handleAccept = (bidId) => {
-    Alert.alert('Accept Bid', 'This will assign the job to this provider. Other bids will be declined.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Accept', style: 'default', onPress: async () => {
-        try { await acceptBid(bidId); Alert.alert('Bid Accepted!', 'The provider has been notified.'); loadBids(); }
-        catch (err) { Alert.alert('Error', err.response?.data?.error || 'Failed'); }
-      }},
-    ]);
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('This will assign the job to this provider. Other bids will be declined. Continue?');
+      if (confirmed) doAccept(bidId);
+    } else {
+      Alert.alert('Accept Bid', 'This will assign the job to this provider. Other bids will be declined.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Accept', style: 'default', onPress: () => doAccept(bidId) },
+      ]);
+    }
   };
 
   const handleReject = async (bidId) => {

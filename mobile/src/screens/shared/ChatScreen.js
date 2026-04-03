@@ -21,7 +21,8 @@ export default function ChatScreen({ route }) {
       dispatch(setMessages(data.messages));
     });
 
-    const s = io('http://192.168.0.127:3000', { auth: { token: accessToken } });
+    const socketUrl = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://192.168.0.127:5000';
+    const s = io(socketUrl, { auth: { token: accessToken } });
     s.on('connect', () => { s.emit('join_room', jobId); });
     s.on('new_message', (msg) => { dispatch(addMessage(msg)); });
     s.on('typing', () => { setTyping(true); setTimeout(() => setTyping(false), 2000); });

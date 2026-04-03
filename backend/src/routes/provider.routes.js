@@ -82,7 +82,7 @@ router.get('/nearby-jobs', async (req, res, next) => {
 router.get('/earnings', async (req, res, next) => {
   try {
     const [payments] = await db.query(
-      `SELECT p.*, j.title as job_title, j.completed_at
+      `SELECT p.*, j.title as job_title, j.updated_at as job_completed_at
        FROM payments p
        JOIN jobs j ON p.job_id = j.id
        WHERE p.provider_id = ? AND p.status = 'released'
