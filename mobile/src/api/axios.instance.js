@@ -6,8 +6,8 @@ import { logout, setTokens } from '../store/authSlice';
 
 // Web uses localhost, mobile uses LAN IP to reach the backend
 const API_URL = Platform.OS === 'web'
-  ? 'http://localhost:5000/api'
-  : 'http://192.168.0.127:5000/api';
+  ? 'http://localhost:3000/api'
+  : 'http://192.168.0.127:3000/api';
 
 const api = axios.create({
   baseURL: API_URL,

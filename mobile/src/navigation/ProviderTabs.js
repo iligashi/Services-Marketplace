@@ -1,7 +1,8 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import BrowseJobsScreen from '../screens/provider/BrowseJobsScreen';
 import SubmitBidScreen from '../screens/provider/SubmitBidScreen';
 import MyBidsScreen from '../screens/provider/MyBidsScreen';
@@ -9,31 +10,22 @@ import EarningsScreen from '../screens/provider/EarningsScreen';
 import DashboardScreen from '../screens/provider/DashboardScreen';
 import ChatScreen from '../screens/shared/ChatScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
-import { colors, shadows } from '../theme';
+import { shadows } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-const TabIcon = ({ icon, label, focused }) => (
-  <View style={tabStyles.iconWrap}>
-    <View style={[tabStyles.iconBg, focused && tabStyles.iconBgActive]}>
-      <Text style={[tabStyles.icon, focused && tabStyles.iconActive]}>{icon}</Text>
-    </View>
-    <Text style={[tabStyles.label, focused && tabStyles.labelActive]}>{label}</Text>
-  </View>
-);
-
-const screenOptions = {
-  headerStyle: { backgroundColor: colors.white, elevation: 0, shadowOpacity: 0 },
-  headerTitleStyle: { fontSize: 17, fontWeight: '600', color: colors.text },
-  headerTintColor: colors.primary,
-  headerShadowVisible: false,
-  headerBackTitleVisible: false,
-};
-
-function BrowseStack() {
+function BrowseStack({ colors }) {
+  const opts = {
+    headerStyle: { backgroundColor: colors.card, elevation: 0, shadowOpacity: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
+    headerTitleStyle: { fontSize: 17, fontWeight: '700', color: colors.text },
+    headerTintColor: colors.primary,
+    headerShadowVisible: false,
+    headerBackTitleVisible: false,
+  };
   return (
-    <Stack.Navigator screenOptions={screenOptions}>
+    <Stack.Navigator screenOptions={opts}>
       <Stack.Screen name="BrowseJobs" component={BrowseJobsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SubmitBid" component={SubmitBidScreen} options={{ title: 'Submit Bid' }} />
       <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Messages' }} />
@@ -41,9 +33,16 @@ function BrowseStack() {
   );
 }
 
-function MyBidsStack() {
+function MyBidsStack({ colors }) {
+  const opts = {
+    headerStyle: { backgroundColor: colors.card, elevation: 0, shadowOpacity: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
+    headerTitleStyle: { fontSize: 17, fontWeight: '700', color: colors.text },
+    headerTintColor: colors.primary,
+    headerShadowVisible: false,
+    headerBackTitleVisible: false,
+  };
   return (
-    <Stack.Navigator screenOptions={screenOptions}>
+    <Stack.Navigator screenOptions={opts}>
       <Stack.Screen name="MyBids" component={MyBidsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Messages' }} />
     </Stack.Navigator>
@@ -51,12 +50,22 @@ function MyBidsStack() {
 }
 
 export default function ProviderTabs() {
+  const { colors } = useTheme();
+
+  const headerOpts = {
+    headerStyle: { backgroundColor: colors.card, elevation: 0, shadowOpacity: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
+    headerTitleStyle: { fontSize: 17, fontWeight: '700', color: colors.text },
+    headerTintColor: colors.primary,
+    headerShadowVisible: false,
+    headerBackTitleVisible: false,
+  };
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.white,
+          backgroundColor: colors.tabBar || colors.card,
           borderTopWidth: 1,
           borderTopColor: colors.border,
           height: Platform.OS === 'ios' ? 88 : 64,
@@ -64,9 +73,9 @@ export default function ProviderTabs() {
           paddingTop: 8,
           ...shadows.md,
         },
-        tabBarShowLabel: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textTertiary,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
       }}
     >
       <Tab.Screen
@@ -75,32 +84,46 @@ export default function ProviderTabs() {
         options={{
           headerShown: true,
           title: 'Dashboard',
-          ...screenOptions,
-          tabBarIcon: ({ focused }) => <TabIcon icon="D" label="Dashboard" focused={focused} />,
+          ...headerOpts,
+          tabBarLabel: 'Dashboard',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={22} color={color} />
+          ),
         }}
       />
       <Tab.Screen
         name="BrowseTab"
-        component={BrowseStack}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="B" label="Browse" focused={focused} />,
+          tabBarLabel: 'Browse',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'search' : 'search-outline'} size={22} color={color} />
+          ),
         }}
-      />
+      >
+        {() => <BrowseStack colors={colors} />}
+      </Tab.Screen>
       <Tab.Screen
         name="MyBidsTab"
-        component={MyBidsStack}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="J" label="My Bids" focused={focused} />,
+          tabBarLabel: 'My Bids',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'document-text' : 'document-text-outline'} size={22} color={color} />
+          ),
         }}
-      />
+      >
+        {() => <MyBidsStack colors={colors} />}
+      </Tab.Screen>
       <Tab.Screen
         name="Earnings"
         component={EarningsScreen}
         options={{
           headerShown: true,
           title: 'Earnings',
-          ...screenOptions,
-          tabBarIcon: ({ focused }) => <TabIcon icon="$" label="Earnings" focused={focused} />,
+          ...headerOpts,
+          tabBarLabel: 'Earnings',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'wallet' : 'wallet-outline'} size={22} color={color} />
+          ),
         }}
       />
       <Tab.Screen
@@ -108,24 +131,14 @@ export default function ProviderTabs() {
         component={ProfileScreen}
         options={{
           headerShown: true,
-          title: 'Profile',
-          ...screenOptions,
-          tabBarIcon: ({ focused }) => <TabIcon icon="P" label="Profile" focused={focused} />,
+          title: 'Profile & Settings',
+          ...headerOpts,
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
+          ),
         }}
       />
     </Tab.Navigator>
   );
 }
-
-const tabStyles = StyleSheet.create({
-  iconWrap: { alignItems: 'center', justifyContent: 'center' },
-  iconBg: {
-    width: 36, height: 28, borderRadius: 14,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  iconBgActive: { backgroundColor: colors.primaryBg },
-  icon: { fontSize: 14, fontWeight: '800', color: colors.textTertiary },
-  iconActive: { color: colors.primary },
-  label: { fontSize: 10, fontWeight: '500', color: colors.textTertiary, marginTop: 2 },
-  labelActive: { color: colors.primary, fontWeight: '600' },
-});

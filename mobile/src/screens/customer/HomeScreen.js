@@ -1,12 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, RefreshControl } from 'react-native';
+import {
+  View, Text, FlatList, TouchableOpacity,
+  TextInput, RefreshControl, StatusBar,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchJobs, fetchCategories } from '../../store/jobSlice';
 import JobCard from '../../components/JobCard';
-import { colors, radius, shadows, typography } from '../../theme';
+import { radius, shadows } from '../../theme';
+import { useTheme } from '../../context/ThemeContext';
+
+const CATEGORY_ICONS = {
+  cleaning: 'sparkles-outline',
+  plumbing: 'water-outline',
+  electrical: 'flash-outline',
+  gardening: 'leaf-outline',
+  moving: 'cube-outline',
+  painting: 'brush-outline',
+  carpentry: 'hammer-outline',
+  default: 'build-outline',
+};
 
 export default function HomeScreen({ navigation }) {
   const dispatch = useDispatch();
+  const { colors } = useTheme();
   const { list, categories, loading, pagination } = useSelector((state) => state.jobs);
   const { user } = useSelector((state) => state.auth);
   const [search, setSearch] = useState('');
@@ -32,136 +49,123 @@ export default function HomeScreen({ navigation }) {
     dispatch(fetchJobs({ status: 'open', category: cat || undefined, search: search || undefined }));
   };
 
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   const Header = () => (
-    <View style={styles.headerSection}>
-      {/* Greeting */}
-      <View style={styles.greeting}>
+    <View style={{ backgroundColor: colors.bg }}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.gradientStart} />
+
+      {/* Top bar */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20, backgroundColor: colors.gradientStart }}>
         <View>
-          <Text style={styles.greetingLabel}>Welcome back,</Text>
-          <Text style={styles.greetingName}>{user?.name?.split(' ')[0] || 'there'} 👋</Text>
+          <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '500' }}>{getGreeting()},</Text>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff', marginTop: 2 }}>{user?.name?.split(' ')[0] || 'there'} 👋</Text>
         </View>
-        <TouchableOpacity style={styles.profileBtn}>
-          <Text style={styles.profileInitial}>{user?.name?.charAt(0)?.toUpperCase()}</Text>
+        <TouchableOpacity
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}
+          onPress={() => navigation.navigate('Profile')}
+        >
+          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>{user?.name?.charAt(0)?.toUpperCase() || '?'}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Search */}
-      <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>{'⌕'}</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search for services..."
-          placeholderTextColor={colors.textTertiary}
-          value={search}
-          onChangeText={setSearch}
-          onSubmitEditing={() => loadJobs()}
-          returnKeyType="search"
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => { setSearch(''); loadJobs({ search: undefined }); }}>
-            <Text style={styles.clearSearch}>{'\u2715'}</Text>
-          </TouchableOpacity>
-        )}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 16, backgroundColor: colors.gradientStart }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, paddingHorizontal: 14, ...shadows.sm }}>
+          <Ionicons name="search-outline" size={20} color={colors.textTertiary} style={{ marginRight: 10 }} />
+          <TextInput
+            style={{ flex: 1, paddingVertical: 12, fontSize: 15, color: colors.text }}
+            placeholder="Search services, jobs..."
+            placeholderTextColor={colors.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={() => loadJobs()}
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => { setSearch(''); loadJobs({ search: undefined }); }}>
+              <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity
+          style={{ width: 46, height: 46, borderRadius: radius.lg, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' }}
+          onPress={() => loadJobs()}
+        >
+          <Ionicons name="options-outline" size={20} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {/* Categories */}
-      <FlatList
-        horizontal
-        data={categories}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.categoryChip, selectedCategory === item.slug && styles.categoryChipActive]}
-            onPress={() => handleCategoryFilter(item.slug)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.categoryText, selectedCategory === item.slug && styles.categoryTextActive]}>
-              {item.name}
-            </Text>
-          </TouchableOpacity>
-        )}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryList}
-      />
+      {categories.length > 0 && (
+        <FlatList
+          horizontal
+          data={[{ id: 0, name: 'All', slug: null }, ...categories]}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => {
+            const active = item.slug === null ? !selectedCategory : selectedCategory === item.slug;
+            const iconName = CATEGORY_ICONS[item.slug] || CATEGORY_ICONS.default;
+            return (
+              <TouchableOpacity
+                style={[
+                  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, marginRight: 8 },
+                  active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+                onPress={() => handleCategoryFilter(item.slug)}
+                activeOpacity={0.75}
+              >
+                <Ionicons name={iconName} size={14} color={active ? '#fff' : colors.textSecondary} style={{ marginRight: 5 }} />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: active ? '#fff' : colors.textSecondary }}>{item.name}</Text>
+              </TouchableOpacity>
+            );
+          }}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 14 }}
+        />
+      )}
 
-      {/* Results count */}
-      <View style={styles.resultsHeader}>
-        <Text style={styles.resultsTitle}>Available Jobs</Text>
-        <Text style={styles.resultsCount}>
-          {pagination ? `${pagination.total} found` : ''}
-        </Text>
+      {/* Section header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8 }}>
+        <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>Available Jobs</Text>
+        {pagination ? (
+          <View style={{ backgroundColor: colors.primaryBg, paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.full, borderWidth: 1, borderColor: colors.primaryBorder }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>{pagination.total}</Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <FlatList
         data={list}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
-          <JobCard job={item} onPress={() => navigation.navigate('JobDetail', { jobId: item.id })} />
+          <JobCard job={item} onPress={() => navigation.navigate('JobDetail', { jobId: item.id })} colors={colors} />
         )}
         ListHeaderComponent={Header}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={loadJobs} tintColor={colors.primary} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>{'📋'}</Text>
-            <Text style={styles.emptyTitle}>{loading ? 'Finding jobs...' : 'No jobs found'}</Text>
-            <Text style={styles.emptySubtitle}>
-              {loading ? 'Hang tight!' : 'Try adjusting your filters or check back later'}
-            </Text>
-          </View>
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={loadJobs} tintColor={colors.primary} colors={[colors.primary]} />
         }
-        contentContainerStyle={list.length === 0 ? { flex: 1 } : { paddingBottom: 20 }}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.bgAlt, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+                <Ionicons name="search-outline" size={36} color={colors.textTertiary} />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text, marginBottom: 8, textAlign: 'center' }}>No jobs found</Text>
+              <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 }}>Try adjusting your filters or check back later</Text>
+            </View>
+          ) : null
+        }
+        contentContainerStyle={list.length === 0 ? { flex: 1 } : { paddingBottom: 24 }}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-
-  headerSection: { paddingBottom: 8 },
-  greeting: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
-  greetingLabel: { ...typography.bodySmall },
-  greetingName: { ...typography.h2, fontSize: 24 },
-  profileBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center',
-    ...shadows.md,
-  },
-  profileInitial: { color: '#fff', fontSize: 18, fontWeight: '700' },
-
-  searchContainer: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.white, marginHorizontal: 16,
-    borderRadius: radius.lg, paddingHorizontal: 16,
-    borderWidth: 1, borderColor: colors.border, ...shadows.sm,
-  },
-  searchIcon: { fontSize: 20, color: colors.textTertiary, marginRight: 10 },
-  searchInput: { flex: 1, paddingVertical: 14, fontSize: 15, color: colors.text },
-  clearSearch: { fontSize: 16, color: colors.textTertiary, padding: 4 },
-
-  categoryList: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
-  categoryChip: {
-    paddingHorizontal: 18, paddingVertical: 10,
-    borderRadius: radius.full, marginRight: 8,
-    backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
-  },
-  categoryChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  categoryText: { ...typography.buttonSmall, fontSize: 13, color: colors.textSecondary },
-  categoryTextActive: { color: '#fff' },
-
-  resultsHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 4,
-  },
-  resultsTitle: { ...typography.h3 },
-  resultsCount: { ...typography.bodySmall, fontSize: 12 },
-
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { ...typography.h3, marginBottom: 8, textAlign: 'center' },
-  emptySubtitle: { ...typography.bodySmall, textAlign: 'center', lineHeight: 20 },
-});
