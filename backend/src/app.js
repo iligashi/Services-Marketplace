@@ -16,12 +16,32 @@ app.use(cors({
   credentials: true,
 }));
 
-// Rate limiting
-app.use(rateLimit({
+// Rate limiting — global baseline, with stricter limits on sensitive routes below
+const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: { error: 'Too many requests, try again later' },
-}));
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many auth attempts, please try again later' },
+});
+
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many payment requests, please try again later' },
+});
+
+app.use('/api/auth', authLimiter);
+app.use('/api/payments', paymentLimiter);
+app.use(globalLimiter);
 
 // Stripe webhook needs raw body
 app.post('/api/payments/webhook',

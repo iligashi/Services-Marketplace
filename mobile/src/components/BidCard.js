@@ -18,10 +18,14 @@ export default function BidCard({ bid, onAccept, onReject }) {
         <View style={styles.providerInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.providerName}>{bid.provider_name}</Text>
-            {bid.id_verified ? (
-              <View style={styles.verifiedBadge}>
-                <Ionicons name="shield-checkmark" size={12} color={colors.success} />
-                <Text style={styles.verifiedText}>Verified</Text>
+            {bid.badge ? (
+              <View style={[styles.verifiedBadge, bid.badge.tier === 'elite_pro' && styles.eliteBadge]}>
+                <Ionicons
+                  name={bid.badge.tier === 'elite_pro' ? 'trophy' : bid.badge.tier === 'top_rated' ? 'star' : 'shield-checkmark'}
+                  size={12}
+                  color={bid.badge.tier === 'elite_pro' ? colors.accentDark : colors.success}
+                />
+                <Text style={[styles.verifiedText, bid.badge.tier === 'elite_pro' && { color: colors.accentDark }]}>{bid.badge.label}</Text>
               </View>
             ) : null}
           </View>
@@ -98,6 +102,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   providerName: { fontSize: 16, fontWeight: '700', color: colors.text },
   verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.successBg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.full },
+  eliteBadge: { backgroundColor: colors.accentLight },
   verifiedText: { fontSize: 10, fontWeight: '700', color: colors.success },
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   statDot: { color: colors.textTertiary, fontSize: 12 },

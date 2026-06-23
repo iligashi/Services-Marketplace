@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const config = require('../config/env');
 const { AppError } = require('../middleware/error.middleware');
+const { getBadge } = require('../services/reputation.service');
+const { registerPushToken } = require('../services/notification.service');
 
 function generateTokens(user) {
   const accessToken = jwt.sign(
@@ -188,6 +190,23 @@ exports.updateAvatar = async (req, res, next) => {
   }
 };
 
+exports.updatePushToken = async (req, res, next) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      await db.query('UPDATE users SET push_token = NULL WHERE id = ?', [req.user.id]);
+      return res.json({ message: 'Push token cleared' });
+    }
+    await registerPushToken(req.user.id, token);
+    res.json({ message: 'Push token registered' });
+  } catch (err) {
+    if (err.message === 'Invalid Expo push token') {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
 exports.getPublicProfile = async (req, res, next) => {
   try {
     const [rows] = await db.query(
@@ -212,7 +231,8 @@ exports.getPublicProfile = async (req, res, next) => {
       [req.params.id]
     );
 
-    res.json({ user: rows[0], reviews });
+    const user = rows[0];
+    res.json({ user: { ...user, badge: getBadge(user) }, reviews });
   } catch (err) {
     next(err);
   }

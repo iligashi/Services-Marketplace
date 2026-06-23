@@ -20,8 +20,14 @@ const chatSlice = createSlice({
     setUnreadCount(state, action) {
       state.unreadCount = action.payload;
     },
+    markMessagesReadFrom(state, action) {
+      const readerId = action.payload;
+      state.messages.forEach((m) => {
+        if (m.sender_id !== readerId) m.is_read = true;
+      });
+    },
   },
 });
 
-export const { setMessages, addMessage, setActiveRoom, setUnreadCount } = chatSlice.actions;
+export const { setMessages, addMessage, setActiveRoom, setUnreadCount, markMessagesReadFrom } = chatSlice.actions;
 export default chatSlice.reducer;

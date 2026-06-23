@@ -42,7 +42,7 @@ async function findNearbyJobs(lat, lng, radiusKm = 25) {
        AND j.location_lat IS NOT NULL
        AND j.location_lng IS NOT NULL
      HAVING distance <= ?
-     ORDER BY j.created_at DESC`,
+     ORDER BY distance ASC`,
     [lat, lng, lat, radiusKm]
   );
 

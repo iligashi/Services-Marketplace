@@ -6,15 +6,20 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { StatusBar, ActivityIndicator, View, Animated } from 'react-native';
 import { restoreAuth } from './src/store/authSlice';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { registerForPushNotifications } from './src/utils/push';
 
 function AppContent() {
   const dispatch = useDispatch();
-  const { isRestoring } = useSelector((state) => state.auth);
+  const { isRestoring, user } = useSelector((state) => state.auth);
   const { colors, fadeAnim, isDark } = useTheme();
 
   useEffect(() => {
     dispatch(restoreAuth());
   }, []);
+
+  useEffect(() => {
+    if (user) registerForPushNotifications();
+  }, [user?.id]);
 
   if (isRestoring) {
     return (
