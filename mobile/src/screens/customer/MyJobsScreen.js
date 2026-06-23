@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchMyJobs } from '../../store/jobSlice';
 import JobCard from '../../components/JobCard';
 import { colors, radius, typography } from '../../theme';
 
 const FILTERS = [
-  { key: '', label: 'All' },
-  { key: 'open', label: 'Open' },
-  { key: 'in_progress', label: 'Active' },
-  { key: 'completed', label: 'Done' },
+  { key: '', label: 'All', icon: 'apps-outline' },
+  { key: 'open', label: 'Open', icon: 'radio-button-on-outline' },
+  { key: 'in_progress', label: 'Active', icon: 'time-outline' },
+  { key: 'completed', label: 'Done', icon: 'checkmark-circle-outline' },
 ];
 
 export default function MyJobsScreen({ navigation }) {
@@ -28,35 +29,47 @@ export default function MyJobsScreen({ navigation }) {
     <View style={styles.container}>
       <FlatList
         data={myJobs}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
           <JobCard job={item} onPress={() => navigation.navigate('JobDetail', { jobId: item.id })} showBidCount />
         )}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => handleFilter(filter)} tintColor={colors.primary} />}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={() => handleFilter(filter)} tintColor={colors.primary} colors={[colors.primary]} />
+        }
         ListHeaderComponent={
-          <View style={styles.headerSection}>
-            <Text style={styles.pageTitle}>My Jobs</Text>
+          <View style={styles.header}>
+            <Text style={styles.title}>My Jobs</Text>
+            <Text style={styles.subtitle}>{myJobs.length} {myJobs.length === 1 ? 'job' : 'jobs'} total</Text>
             <View style={styles.filters}>
-              {FILTERS.map(f => (
-                <TouchableOpacity
-                  key={f.key}
-                  style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
-                  onPress={() => handleFilter(f.key)}
-                >
-                  <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>{f.label}</Text>
-                </TouchableOpacity>
-              ))}
+              {FILTERS.map(f => {
+                const active = filter === f.key;
+                return (
+                  <TouchableOpacity
+                    key={f.key}
+                    style={[styles.chip, active && styles.chipActive]}
+                    onPress={() => handleFilter(f.key)}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name={f.icon} size={13} color={active ? colors.white : colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>{'📝'}</Text>
-            <Text style={styles.emptyTitle}>{loading ? 'Loading...' : 'No jobs yet'}</Text>
-            <Text style={styles.emptySubtitle}>Post your first job to get started</Text>
-          </View>
+          !loading ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="briefcase-outline" size={36} color={colors.textTertiary} />
+              </View>
+              <Text style={styles.emptyTitle}>No jobs yet</Text>
+              <Text style={styles.emptyDesc}>Post your first job to get started</Text>
+            </View>
+          ) : null
         }
-        contentContainerStyle={myJobs.length === 0 ? { flex: 1 } : { paddingBottom: 20 }}
+        contentContainerStyle={myJobs.length === 0 ? { flex: 1 } : { paddingBottom: 24 }}
       />
     </View>
   );
@@ -64,18 +77,23 @@ export default function MyJobsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  headerSection: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
-  pageTitle: { ...typography.h1, marginBottom: 16 },
-  filters: { flexDirection: 'row', gap: 8 },
-  filterChip: {
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: radius.full,
-    backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
+  header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
+  title: { ...typography.h1, marginBottom: 2 },
+  subtitle: { ...typography.bodySmall, marginBottom: 16 },
+  filters: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  chip: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full,
+    backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border,
   },
-  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterText: { ...typography.buttonSmall, fontSize: 13, color: colors.textSecondary },
-  filterTextActive: { color: '#fff' },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { ...typography.h3, marginBottom: 8 },
-  emptySubtitle: { ...typography.bodySmall },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  chipTextActive: { color: colors.white },
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+  emptyIcon: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: colors.bgAlt, justifyContent: 'center', alignItems: 'center', marginBottom: 20,
+  },
+  emptyTitle: { ...typography.h3, marginBottom: 8, textAlign: 'center' },
+  emptyDesc: { ...typography.bodySmall, textAlign: 'center' },
 });

@@ -1,64 +1,16 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, radius, shadows, typography, statusConfig } from '../theme';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, radius, shadows, typography } from '../theme';
 
-export default function JobCard({ job, onPress, showBidCount, showDistance }) {
-  const status = statusConfig[job.status] || statusConfig.open;
-
-  return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          {job.category_name ? (
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{job.category_name}</Text>
-            </View>
-          ) : null}
-          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-            <Text style={[styles.statusDot, { color: status.color }]}>{status.icon}</Text>
-            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-          </View>
-        </View>
-        {job.budget ? (
-          <Text style={styles.budget}>{`$${parseFloat(job.budget).toLocaleString()}`}</Text>
-        ) : null}
-      </View>
-
-      {/* Title & Description */}
-      <Text style={styles.title} numberOfLines={2}>{job.title}</Text>
-      <Text style={styles.description} numberOfLines={2}>{job.description}</Text>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <View style={styles.metaRow}>
-          {job.location_address ? (
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>{'\u25CB'}</Text>
-              <Text style={styles.metaText} numberOfLines={1}>{job.location_address}</Text>
-            </View>
-          ) : null}
-          {showDistance && job.distance ? (
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>{'\u2192'}</Text>
-              <Text style={[styles.metaText, { color: colors.primary }]}>{`${parseFloat(job.distance).toFixed(1)} km`}</Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.footerRight}>
-          {showBidCount && job.bid_count !== undefined ? (
-            <View style={styles.bidBadge}>
-              <Text style={styles.bidCount}>{String(job.bid_count)}</Text>
-              <Text style={styles.bidLabel}>{job.bid_count === 1 ? 'bid' : 'bids'}</Text>
-            </View>
-          ) : null}
-          <Text style={styles.timeAgo}>{timeAgo(job.created_at)}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
+const STATUS = {
+  open: { label: 'Open', color: '#10B981', bg: '#D1FAE5', icon: 'radio-button-on' },
+  assigned: { label: 'Assigned', color: '#2563EB', bg: '#DBEAFE', icon: 'person-circle' },
+  in_progress: { label: 'In Progress', color: '#F59E0B', bg: '#FEF3C7', icon: 'time' },
+  completed: { label: 'Completed', color: '#10B981', bg: '#D1FAE5', icon: 'checkmark-done-circle' },
+  disputed: { label: 'Disputed', color: '#EF4444', bg: '#FEE2E2', icon: 'alert-circle' },
+  cancelled: { label: 'Cancelled', color: '#64748B', bg: '#F1F5F9', icon: 'close-circle' },
+};
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -72,37 +24,121 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString();
 }
 
+export default function JobCard({ job, onPress, showBidCount, showDistance }) {
+  const status = STATUS[job.status] || STATUS.open;
+
+  return (
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
+      {/* Top row: category + budget */}
+      <View style={styles.topRow}>
+        <View style={styles.topLeft}>
+          {job.category_name ? (
+            <View style={styles.catBadge}>
+              <Text style={styles.catText}>{job.category_name}</Text>
+            </View>
+          ) : null}
+          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+            <Ionicons name={status.icon} size={10} color={status.color} style={{ marginRight: 4 }} />
+            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+          </View>
+        </View>
+        {job.budget ? (
+          <View style={styles.budgetWrap}>
+            <Text style={styles.budgetCurrency}>$</Text>
+            <Text style={styles.budgetAmount}>{parseFloat(job.budget).toLocaleString()}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Title */}
+      <Text style={styles.title} numberOfLines={2}>{job.title}</Text>
+
+      {/* Description */}
+      <Text style={styles.desc} numberOfLines={2}>{job.description}</Text>
+
+      {/* Divider */}
+      <View style={styles.divider} />
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        <View style={styles.footerLeft}>
+          {job.location_address ? (
+            <View style={styles.metaItem}>
+              <Ionicons name="location-outline" size={13} color={colors.textTertiary} />
+              <Text style={styles.metaText} numberOfLines={1}>{job.location_address}</Text>
+            </View>
+          ) : null}
+          {showDistance && job.distance ? (
+            <View style={styles.metaItem}>
+              <Ionicons name="navigate-outline" size={13} color={colors.primary} />
+              <Text style={[styles.metaText, { color: colors.primary }]}>{parseFloat(job.distance).toFixed(1)} km</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.footerRight}>
+          {showBidCount && job.bid_count !== undefined ? (
+            <View style={styles.bidBadge}>
+              <Ionicons name="people-outline" size={13} color={colors.primary} />
+              <Text style={styles.bidCount}>{job.bid_count} {job.bid_count === 1 ? 'bid' : 'bids'}</Text>
+            </View>
+          ) : null}
+          <View style={styles.timeWrap}>
+            <Ionicons name="time-outline" size={12} color={colors.textTertiary} />
+            <Text style={styles.timeText}>{timeAgo(job.created_at)}</Text>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.card, marginHorizontal: 16, marginVertical: 6,
-    padding: 18, borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    marginHorizontal: 16, marginVertical: 6,
+    padding: 16, borderRadius: radius.xl,
     borderWidth: 1, borderColor: colors.border,
     ...shadows.sm,
   },
 
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
-  headerLeft: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 },
-  categoryBadge: { backgroundColor: colors.primaryBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full },
-  categoryText: { ...typography.caption, color: colors.primary, fontSize: 10 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  topLeft: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1, marginRight: 8 },
 
-  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, gap: 4 },
-  statusDot: { fontSize: 8 },
-  statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
+  catBadge: {
+    backgroundColor: colors.primaryBg,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: 1, borderColor: colors.primaryBorder,
+  },
+  catText: { fontSize: 11, fontWeight: '700', color: colors.primary, letterSpacing: 0.2 },
 
-  budget: { fontSize: 20, fontWeight: '800', color: colors.accent },
+  statusBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  statusText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
 
-  title: { ...typography.h3, fontSize: 17, marginBottom: 4, lineHeight: 23 },
-  description: { ...typography.bodySmall, lineHeight: 20, marginBottom: 14 },
+  budgetWrap: { flexDirection: 'row', alignItems: 'baseline' },
+  budgetCurrency: { fontSize: 14, fontWeight: '700', color: colors.success, marginRight: 1 },
+  budgetAmount: { fontSize: 22, fontWeight: '800', color: colors.success },
+
+  title: { fontSize: 16, fontWeight: '700', color: colors.text, lineHeight: 22, marginBottom: 6 },
+  desc: { fontSize: 13, color: colors.textSecondary, lineHeight: 19, marginBottom: 14 },
+
+  divider: { height: 1, backgroundColor: colors.border, marginBottom: 12 },
 
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  metaRow: { flex: 1, gap: 4 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaIcon: { fontSize: 10, color: colors.textTertiary },
-  metaText: { ...typography.bodySmall, fontSize: 12 },
-
+  footerLeft: { flex: 1, gap: 4 },
   footerRight: { alignItems: 'flex-end', gap: 4 },
-  bidBadge: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
-  bidCount: { fontSize: 16, fontWeight: '800', color: colors.primary },
-  bidLabel: { fontSize: 11, color: colors.textTertiary, fontWeight: '500' },
-  timeAgo: { fontSize: 11, color: colors.textTertiary },
+
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaText: { fontSize: 12, color: colors.textTertiary, fontWeight: '500' },
+
+  bidBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  bidCount: { fontSize: 12, fontWeight: '700', color: colors.primary },
+
+  timeWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  timeText: { fontSize: 11, color: colors.textTertiary },
 });

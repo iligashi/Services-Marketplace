@@ -12,7 +12,7 @@ const app = express();
 // Security
 app.use(helmet());
 app.use(cors({
-  origin: [config.clientUrl, config.adminUrl],
+  origin: [config.clientUrl, config.adminUrl, 'http://localhost:8082', 'http://localhost:8081', 'http://localhost:5174'],
   credentials: true,
 }));
 
