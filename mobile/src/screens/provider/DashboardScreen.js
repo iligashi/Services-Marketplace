@@ -53,10 +53,21 @@ export default function DashboardScreen() {
           <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '500' }}>{getGreeting()},</Text>
           <Text style={{ fontSize: 26, fontWeight: '800', color: '#fff', marginTop: 2, marginBottom: 8 }}>{user?.name?.split(' ')[0] || 'Provider'}</Text>
           {profile?.avg_rating ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <StarRating rating={profile.avg_rating} size={14} />
               <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '500' }}>{parseFloat(profile.avg_rating).toFixed(1)} · {profile.total_jobs_done} jobs</Text>
+              {profile.badge ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 }}>
+                  <Ionicons name={profile.badge.tier === 'elite_pro' ? 'trophy' : profile.badge.tier === 'top_rated' ? 'star' : 'shield-checkmark'} size={11} color="#fff" />
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>{profile.badge.label}</Text>
+                </View>
+              ) : null}
             </View>
+          ) : null}
+          {profile?.fee_rate !== undefined ? (
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 6 }}>
+              Platform fee: {profile.fee_rate}% {profile.fee_rate < 12 ? '(reduced for your tier)' : ''}
+            </Text>
           ) : null}
         </View>
         <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}>

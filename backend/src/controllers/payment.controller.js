@@ -2,6 +2,9 @@ const db = require('../config/db');
 const stripe = require('../config/stripe');
 const config = require('../config/env');
 const { AppError } = require('../middleware/error.middleware');
+const { getFeeRate } = require('../services/reputation.service');
+const { releaseEscrowForJob } = require('../services/escrow.service');
+const { createNotification } = require('../services/notification.service');
 
 exports.createPaymentIntent = async (req, res, next) => {
   try {
@@ -21,8 +24,15 @@ exports.createPaymentIntent = async (req, res, next) => {
     }
 
     const job = jobs[0];
+
+    const [providerProfiles] = await db.query(
+      'SELECT avg_rating, total_jobs_done, id_verified FROM provider_profiles WHERE user_id = ?',
+      [job.provider_id]
+    );
+    const feeRate = getFeeRate(providerProfiles[0]);
+
     const amount = Math.round(job.bid_amount * 100); // cents
-    const platformFee = Math.round(amount * (config.stripe.platformFeePercent / 100));
+    const platformFee = Math.round(amount * (feeRate / 100));
     const providerPayout = amount - platformFee;
 
     if (!stripe) {
@@ -54,6 +64,7 @@ exports.createPaymentIntent = async (req, res, next) => {
       clientSecret: paymentIntent.client_secret,
       amount: job.bid_amount,
       platform_fee: platformFee / 100,
+      platform_fee_rate: feeRate,
       provider_payout: providerPayout / 100,
     });
   } catch (err) {
@@ -83,62 +94,21 @@ exports.confirmCompletion = async (req, res, next) => {
       throw new AppError('Job must be assigned or in progress to complete', 400);
     }
 
-    // Check if there's a held payment to process via Stripe
-    const [payments] = await db.query(
-      'SELECT * FROM payments WHERE job_id = ? AND status = ?',
-      [job_id, 'held']
-    );
+    await db.query('UPDATE jobs SET customer_confirmed_at = NOW() WHERE id = ?', [job_id]);
 
-    const conn = await db.getConnection();
-    try {
-      await conn.beginTransaction();
-
-      if (payments.length > 0 && stripe) {
-        const payment = payments[0];
-        // Capture the Stripe payment
-        await stripe.paymentIntents.capture(payment.stripe_payment_intent_id);
-
-        const [profiles] = await conn.query(
-          'SELECT stripe_account_id FROM provider_profiles WHERE user_id = ?',
-          [payment.provider_id]
-        );
-
-        let transferId = null;
-        if (profiles.length > 0 && profiles[0].stripe_account_id) {
-          const transfer = await stripe.transfers.create({
-            amount: Math.round(payment.provider_payout * 100),
-            currency: 'usd',
-            destination: profiles[0].stripe_account_id,
-            metadata: { job_id: job_id.toString() },
-          });
-          transferId = transfer.id;
-        }
-
-        await conn.query(
-          'UPDATE payments SET status = ?, released_at = NOW(), stripe_transfer_id = ? WHERE id = ?',
-          ['released', transferId, payment.id]
-        );
-      }
-
-      await conn.query('UPDATE jobs SET status = ? WHERE id = ?', ['completed', job_id]);
-
-      // Increment provider's job count
+    if (job.provider_confirmed_at) {
+      // Both sides have confirmed — release escrow now
+      await releaseEscrowForJob(job_id);
       if (job.provider_id) {
-        await conn.query(
-          'UPDATE provider_profiles SET total_jobs_done = total_jobs_done + 1 WHERE user_id = ?',
-          [job.provider_id]
-        );
+        await createNotification(job.provider_id, 'job_completed', 'Job completed', `Payment for "${job.title}" has been released.`, { job_id });
       }
-
-      await conn.commit();
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
+      return res.json({ message: 'Both parties confirmed — job completed and payment released', status: 'completed' });
     }
 
-    res.json({ message: 'Job completed successfully' });
+    if (job.provider_id) {
+      await createNotification(job.provider_id, 'completion_pending', 'Customer confirmed completion', `The customer confirmed "${job.title}" is done. Confirm on your end to release payment.`, { job_id });
+    }
+    res.json({ message: 'Confirmed — waiting for provider to confirm completion', status: 'awaiting_provider' });
   } catch (err) {
     next(err);
   }

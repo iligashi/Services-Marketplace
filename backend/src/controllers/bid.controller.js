@@ -1,5 +1,7 @@
 const db = require('../config/db');
 const { AppError } = require('../middleware/error.middleware');
+const { getBadge } = require('../services/reputation.service');
+const { createNotification } = require('../services/notification.service');
 
 exports.create = async (req, res, next) => {
   try {
@@ -27,6 +29,14 @@ exports.create = async (req, res, next) => {
       [job_id, req.user.id, amount, message || null, estimated_hours || null]
     );
 
+    await createNotification(
+      jobs[0].customer_id,
+      'new_bid',
+      'New bid received',
+      `You received a $${amount} bid on "${jobs[0].title}"`,
+      { job_id, bid_id: result.insertId }
+    );
+
     res.status(201).json({ message: 'Bid submitted', bid_id: result.insertId });
   } catch (err) {
     next(err);
@@ -46,7 +56,9 @@ exports.getForJob = async (req, res, next) => {
       [req.params.jobId]
     );
 
-    res.json({ bids });
+    const bidsWithBadges = bids.map((b) => ({ ...b, badge: getBadge(b) }));
+
+    res.json({ bids: bidsWithBadges });
   } catch (err) {
     next(err);
   }
@@ -107,6 +119,15 @@ exports.accept = async (req, res, next) => {
     } finally {
       conn.release();
     }
+
+    const [jobTitleRows] = await db.query('SELECT title FROM jobs WHERE id = ?', [bid.job_id]);
+    await createNotification(
+      bid.provider_id,
+      'bid_accepted',
+      'Your bid was accepted!',
+      `Your bid on "${jobTitleRows[0]?.title || 'a job'}" was accepted.`,
+      { job_id: bid.job_id, bid_id: bidId }
+    );
 
     res.json({ message: 'Bid accepted, job assigned', provider_id: bid.provider_id });
   } catch (err) {

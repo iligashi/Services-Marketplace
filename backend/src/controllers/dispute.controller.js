@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { AppError } = require('../middleware/error.middleware');
+const { createNotification } = require('../services/notification.service');
 
 exports.create = async (req, res, next) => {
   try {
@@ -45,6 +46,17 @@ exports.create = async (req, res, next) => {
       "UPDATE payments SET status = 'disputed' WHERE job_id = ? AND status = 'held'",
       [job_id]
     );
+
+    const otherParty = req.user.id === job.customer_id ? providerId : job.customer_id;
+    if (otherParty) {
+      await createNotification(
+        otherParty,
+        'dispute_raised',
+        'A dispute was raised',
+        `A dispute was raised on "${job.title}". Our team will review it.`,
+        { job_id, dispute_id: result.insertId }
+      );
+    }
 
     res.status(201).json({ message: 'Dispute raised', dispute_id: result.insertId });
   } catch (err) {
@@ -98,6 +110,46 @@ exports.resolve = async (req, res, next) => {
     }
 
     res.json({ message: `Dispute resolved with ${action}` });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.uploadEvidence = async (req, res, next) => {
+  try {
+    const [disputes] = await db.query('SELECT * FROM disputes WHERE id = ?', [req.params.id]);
+    if (disputes.length === 0) {
+      throw new AppError('Dispute not found', 404);
+    }
+    const dispute = disputes[0];
+
+    if (dispute.status !== 'open') {
+      throw new AppError('Cannot add evidence to a resolved dispute', 400);
+    }
+
+    const [jobs] = await db.query(
+      `SELECT j.customer_id, b.provider_id FROM jobs j
+       LEFT JOIN bids b ON j.id = b.job_id AND b.status = 'accepted'
+       WHERE j.id = ?`,
+      [dispute.job_id]
+    );
+    const job = jobs[0];
+    const isParticipant = job && (job.customer_id === req.user.id || job.provider_id === req.user.id);
+    if (!isParticipant && req.user.role !== 'admin') {
+      throw new AppError('You are not part of this dispute', 403);
+    }
+
+    if (!req.files || req.files.length === 0) {
+      throw new AppError('No evidence files uploaded', 400);
+    }
+
+    const newUrls = req.files.map((f) => `/uploads/${f.filename}`);
+    const existingUrls = Array.isArray(dispute.evidence_urls) ? dispute.evidence_urls : [];
+    const evidenceUrls = [...existingUrls, ...newUrls];
+
+    await db.query('UPDATE disputes SET evidence_urls = ? WHERE id = ?', [JSON.stringify(evidenceUrls), req.params.id]);
+
+    res.json({ message: 'Evidence uploaded', evidence_urls: evidenceUrls });
   } catch (err) {
     next(err);
   }

@@ -3,6 +3,8 @@ const db = require('../config/db');
 const authenticate = require('../middleware/auth.middleware');
 const authorize = require('../middleware/role.middleware');
 const { findNearbyJobs } = require('../services/geo.service');
+const { getBadge, getFeeRate } = require('../services/reputation.service');
+const jobs = require('../controllers/job.controller');
 
 router.use(authenticate, authorize('provider'));
 
@@ -35,7 +37,7 @@ router.get('/dashboard', async (req, res, next) => {
     );
 
     res.json({
-      profile,
+      profile: profile ? { ...profile, badge: getBadge(profile), fee_rate: getFeeRate(profile) } : profile,
       stats: {
         total_bids: totalBids.total,
         accepted_bids: acceptedBids.total,
@@ -115,26 +117,8 @@ router.get('/active-jobs', async (req, res, next) => {
   }
 });
 
-// Mark job as done (provider side)
-router.patch('/jobs/:id/mark-done', async (req, res, next) => {
-  try {
-    const [jobs] = await db.query(
-      `SELECT j.* FROM jobs j
-       JOIN bids b ON j.id = b.job_id AND b.provider_id = ? AND b.status = 'accepted'
-       WHERE j.id = ? AND j.status = 'in_progress'`,
-      [req.user.id, req.params.id]
-    );
-
-    if (jobs.length === 0) {
-      return res.status(404).json({ error: 'Job not found or not in progress' });
-    }
-
-    // Job stays in_progress; customer must confirm completion to release payment
-    // We just notify the customer
-    res.json({ message: 'Customer has been notified to confirm job completion' });
-  } catch (err) {
-    next(err);
-  }
-});
+// Mark job as done (provider side) — alias for PATCH /jobs/:id/complete,
+// kept for backwards compatibility with this route path
+router.patch('/jobs/:id/mark-done', jobs.markComplete);
 
 module.exports = router;

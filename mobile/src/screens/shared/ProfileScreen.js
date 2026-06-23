@@ -8,6 +8,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { fetchProfile, logout } from '../../store/authSlice';
 import api from '../../api/axios.instance';
 import { useTheme } from '../../context/ThemeContext';
+import { clearPushToken } from '../../utils/push';
 import { radius, shadows, typography } from '../../theme';
 
 function makeStyles(colors) {
@@ -385,7 +386,7 @@ export default function ProfileScreen() {
         onPress={() => {
           Alert.alert('Log Out', 'Are you sure you want to log out?', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Log Out', style: 'destructive', onPress: () => dispatch(logout()) },
+            { text: 'Log Out', style: 'destructive', onPress: async () => { await clearPushToken(); dispatch(logout()); } },
           ]);
         }}
         activeOpacity={0.8}

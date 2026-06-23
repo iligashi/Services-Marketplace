@@ -1,6 +1,8 @@
 const db = require('../config/db');
 const { AppError } = require('../middleware/error.middleware');
 const { paginate, paginationMeta } = require('../utils/pagination');
+const { releaseEscrowForJob } = require('../services/escrow.service');
+const { createNotification } = require('../services/notification.service');
 
 exports.create = async (req, res, next) => {
   try {
@@ -36,8 +38,14 @@ exports.getAll = async (req, res, next) => {
       params.push(status);
     }
     if (search) {
-      where += ' AND (j.title LIKE ? OR j.description LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      // Boolean-mode fulltext search with prefix wildcards on each word, falls back
+      // to LIKE for queries too short for the fulltext min word length (default 4 chars)
+      const words = search.trim().split(/\s+/).filter(Boolean);
+      const booleanQuery = words.map((w) => `+${w.replace(/[+\-<>()~*"@]/g, '')}*`).join(' ');
+      if (booleanQuery) {
+        where += ' AND (MATCH(j.title, j.description) AGAINST (? IN BOOLEAN MODE) OR j.title LIKE ? OR j.description LIKE ?)';
+        params.push(booleanQuery, `%${search}%`, `%${search}%`);
+      }
     }
 
     // Geolocation filter using Haversine formula
@@ -58,8 +66,6 @@ exports.getAll = async (req, res, next) => {
     // If using HAVING, count is tricky — wrap in subquery
     let totalRows;
     if (lat && lng) {
-      const countParams = [...params];
-      countParams.pop(); // remove radius for count wrapping
       const [countResult] = await db.query(
         `SELECT COUNT(*) as total FROM (
           SELECT j.id ${distanceSelect}
@@ -88,7 +94,7 @@ exports.getAll = async (req, res, next) => {
     `;
 
     const pag = paginate(baseQuery, { page, limit });
-    const allParams = lat && lng ? [...params, ...params.slice(0, 3), ...pag.values] : [...params, ...pag.values];
+    const allParams = [...params, ...pag.values];
     const [jobs] = await db.query(pag.query, allParams);
 
     res.json({
@@ -216,15 +222,25 @@ exports.markComplete = async (req, res, next) => {
     if (rows.length === 0) {
       throw new AppError('Job not found', 404);
     }
-    if (rows[0].provider_id !== req.user.id) {
+    const job = rows[0];
+    if (job.provider_id !== req.user.id) {
       throw new AppError('Only the assigned provider can mark work as complete', 403);
     }
-    if (!['assigned', 'in_progress'].includes(rows[0].status)) {
+    if (!['assigned', 'in_progress'].includes(job.status)) {
       throw new AppError('Job must be assigned or in progress to mark complete', 400);
     }
 
-    await db.query('UPDATE jobs SET status = ? WHERE id = ?', ['completed', req.params.id]);
-    res.json({ message: 'Job marked as complete' });
+    await db.query('UPDATE jobs SET provider_confirmed_at = NOW() WHERE id = ?', [req.params.id]);
+
+    if (job.customer_confirmed_at) {
+      // Both sides have confirmed — release escrow now
+      await releaseEscrowForJob(req.params.id);
+      await createNotification(job.customer_id, 'job_completed', 'Job completed', `"${job.title}" is complete and payment has been released.`, { job_id: req.params.id });
+      return res.json({ message: 'Both parties confirmed — job completed and payment released', status: 'completed' });
+    }
+
+    await createNotification(job.customer_id, 'completion_pending', 'Provider marked job done', `The provider says "${job.title}" is complete. Please confirm to release payment.`, { job_id: req.params.id });
+    res.json({ message: 'Marked done — waiting for customer to confirm completion', status: 'awaiting_customer' });
   } catch (err) {
     next(err);
   }

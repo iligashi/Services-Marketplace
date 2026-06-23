@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { io } from 'socket.io-client';
-import { setMessages, addMessage } from '../../store/chatSlice';
+import { setMessages, addMessage, markMessagesReadFrom } from '../../store/chatSlice';
 import api from '../../api/axios.instance';
 import { colors, radius, shadows, typography } from '../../theme';
 
@@ -21,11 +22,18 @@ export default function ChatScreen({ route }) {
       dispatch(setMessages(data.messages));
     });
 
-    const socketUrl = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://192.168.0.127:5000';
+    const socketUrl = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://192.168.0.127:3000';
     const s = io(socketUrl, { auth: { token: accessToken } });
-    s.on('connect', () => { s.emit('join_room', jobId); });
-    s.on('new_message', (msg) => { dispatch(addMessage(msg)); });
-    s.on('typing', () => { setTyping(true); setTimeout(() => setTyping(false), 2000); });
+    s.on('connect', () => {
+      s.emit('join_room', jobId);
+      s.emit('mark_read', { jobId });
+    });
+    s.on('new_message', (msg) => {
+      dispatch(addMessage(msg));
+      if (msg.sender_id !== user.id) s.emit('mark_read', { jobId });
+    });
+    s.on('user_typing', () => { setTyping(true); setTimeout(() => setTyping(false), 2000); });
+    s.on('messages_read', ({ readerId }) => { dispatch(markMessagesReadFrom(readerId)); });
     setSocket(s);
 
     return () => { s.disconnect(); };
@@ -57,9 +65,19 @@ export default function ChatScreen({ route }) {
         <View style={[styles.messageBubble, isMe ? styles.myMessage : styles.theirMessage]}>
           {showAvatar && <Text style={styles.senderName}>{item.sender_name}</Text>}
           <Text style={[styles.messageText, isMe && { color: '#fff' }]}>{item.content}</Text>
-          <Text style={[styles.timeText, isMe && { color: 'rgba(255,255,255,0.6)' }]}>
-            {new Date(item.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.timeText, isMe && { color: 'rgba(255,255,255,0.6)' }]}>
+              {new Date(item.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isMe && (
+              <Ionicons
+                name={item.is_read ? 'checkmark-done' : 'checkmark'}
+                size={14}
+                color={item.is_read ? '#93C5FD' : 'rgba(255,255,255,0.6)'}
+                style={{ marginLeft: 4 }}
+              />
+            )}
+          </View>
         </View>
       </View>
     );
@@ -76,7 +94,7 @@ export default function ChatScreen({ route }) {
         contentContainerStyle={styles.messageList}
         ListEmptyComponent={
           <View style={styles.emptyChat}>
-            <Text style={styles.emptyChatIcon}>{'💬'}</Text>
+            <Ionicons name="chatbubble-ellipses-outline" size={48} color={colors.textTertiary} />
             <Text style={styles.emptyChatTitle}>Start the conversation</Text>
             <Text style={styles.emptyChatSub}>Messages are private between you and the other party</Text>
           </View>
@@ -105,7 +123,7 @@ export default function ChatScreen({ route }) {
           disabled={!input.trim()}
           activeOpacity={0.7}
         >
-          <Text style={styles.sendBtnText}>{'>'}</Text>
+          <Ionicons name="send" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -140,7 +158,8 @@ const styles = StyleSheet.create({
 
   senderName: { ...typography.caption, fontSize: 10, color: colors.primary, marginBottom: 3 },
   messageText: { fontSize: 15, lineHeight: 21, color: colors.text },
-  timeText: { fontSize: 10, color: colors.textTertiary, marginTop: 4, alignSelf: 'flex-end' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-end' },
+  timeText: { fontSize: 10, color: colors.textTertiary },
 
   typingBar: { paddingHorizontal: 20, paddingVertical: 4 },
   typingText: { ...typography.caption, fontSize: 11, color: colors.textSecondary, fontStyle: 'italic', textTransform: 'none' },
@@ -164,10 +183,8 @@ const styles = StyleSheet.create({
     marginLeft: 10, ...shadows.sm,
   },
   sendBtnDisabled: { backgroundColor: colors.border },
-  sendBtnText: { color: '#fff', fontWeight: '800', fontSize: 18 },
 
   emptyChat: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 60 },
-  emptyChatIcon: { fontSize: 48, marginBottom: 16 },
-  emptyChatTitle: { ...typography.h3, marginBottom: 8 },
+  emptyChatTitle: { ...typography.h3, marginTop: 16, marginBottom: 8 },
   emptyChatSub: { ...typography.bodySmall, textAlign: 'center', lineHeight: 20 },
 });
