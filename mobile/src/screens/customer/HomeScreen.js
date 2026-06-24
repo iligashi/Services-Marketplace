@@ -9,6 +9,7 @@ import { fetchJobs, fetchCategories } from '../../store/jobSlice';
 import JobCard from '../../components/JobCard';
 import { radius, shadows } from '../../theme';
 import { useTheme } from '../../context/ThemeContext';
+import NotificationBell from '../../components/NotificationBell';
 
 const CATEGORY_ICONS = {
   cleaning: 'sparkles-outline',
@@ -66,12 +67,15 @@ export default function HomeScreen({ navigation }) {
           <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '500' }}>{getGreeting()},</Text>
           <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff', marginTop: 2 }}>{user?.name?.split(' ')[0] || 'there'} 👋</Text>
         </View>
-        <TouchableOpacity
-          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>{user?.name?.charAt(0)?.toUpperCase() || '?'}</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <NotificationBell light />
+          <TouchableOpacity
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}
+            onPress={() => navigation.navigate('Profile')}
+          >
+            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>{user?.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search */}

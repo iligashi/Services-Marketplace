@@ -24,7 +24,7 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString();
 }
 
-export default function JobCard({ job, onPress, showBidCount, showDistance }) {
+export default function JobCard({ job, onPress, showBidCount, showDistance, saved, onToggleSave }) {
   const status = STATUS[job.status] || STATUS.open;
 
   return (
@@ -42,12 +42,19 @@ export default function JobCard({ job, onPress, showBidCount, showDistance }) {
             <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
           </View>
         </View>
-        {job.budget ? (
-          <View style={styles.budgetWrap}>
-            <Text style={styles.budgetCurrency}>$</Text>
-            <Text style={styles.budgetAmount}>{parseFloat(job.budget).toLocaleString()}</Text>
-          </View>
-        ) : null}
+        <View style={styles.topRight}>
+          {job.budget ? (
+            <View style={styles.budgetWrap}>
+              <Text style={styles.budgetCurrency}>$</Text>
+              <Text style={styles.budgetAmount}>{parseFloat(job.budget).toLocaleString()}</Text>
+            </View>
+          ) : null}
+          {onToggleSave ? (
+            <TouchableOpacity onPress={onToggleSave} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.saveBtn}>
+              <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? colors.primary : colors.textTertiary} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       {/* Title */}
@@ -104,6 +111,8 @@ const styles = StyleSheet.create({
 
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
   topLeft: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1, marginRight: 8 },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  saveBtn: { padding: 2 },
 
   catBadge: {
     backgroundColor: colors.primaryBg,

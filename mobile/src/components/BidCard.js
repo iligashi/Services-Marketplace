@@ -2,19 +2,18 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import StarRating from './StarRating';
+import Avatar from './Avatar';
 import { colors, radius, shadows, typography } from '../theme';
 
-export default function BidCard({ bid, onAccept, onReject }) {
+export default function BidCard({ bid, onAccept, onReject, onViewProfile }) {
   const isPending = bid.status === 'pending';
   const isAccepted = bid.status === 'accepted';
 
   return (
     <View style={styles.card}>
-      {/* Provider header */}
-      <View style={styles.providerRow}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{bid.provider_name?.charAt(0)?.toUpperCase() || '?'}</Text>
-        </View>
+      {/* Provider header — tappable to open full profile */}
+      <TouchableOpacity style={styles.providerRow} onPress={onViewProfile} activeOpacity={onViewProfile ? 0.6 : 1} disabled={!onViewProfile}>
+        <Avatar name={bid.provider_name} uri={bid.provider_avatar} size={50} style={{ marginRight: 12 }} />
         <View style={styles.providerInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.providerName}>{bid.provider_name}</Text>
@@ -45,7 +44,15 @@ export default function BidCard({ bid, onAccept, onReject }) {
           <Text style={styles.amountLabel}>Bid</Text>
           <Text style={styles.amount}>${parseFloat(bid.amount).toLocaleString()}</Text>
         </View>
-      </View>
+      </TouchableOpacity>
+
+      {onViewProfile ? (
+        <TouchableOpacity style={styles.viewProfileRow} onPress={onViewProfile} activeOpacity={0.6}>
+          <Ionicons name="person-circle-outline" size={14} color={colors.primary} />
+          <Text style={styles.viewProfileText}>View full profile</Text>
+          <Ionicons name="chevron-forward" size={13} color={colors.primary} />
+        </TouchableOpacity>
+      ) : null}
 
       {bid.estimated_hours ? (
         <View style={styles.estimateRow}>
@@ -92,12 +99,6 @@ const styles = StyleSheet.create({
   },
 
   providerRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  avatar: {
-    width: 50, height: 50, borderRadius: 25,
-    backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: { color: colors.white, fontSize: 20, fontWeight: '800' },
   providerInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   providerName: { fontSize: 16, fontWeight: '700', color: colors.text },
@@ -111,6 +112,9 @@ const styles = StyleSheet.create({
   amountWrap: { alignItems: 'flex-end' },
   amountLabel: { fontSize: 10, fontWeight: '600', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 },
   amount: { fontSize: 22, fontWeight: '800', color: colors.success },
+
+  viewProfileRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.borderLight },
+  viewProfileText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.primary },
 
   estimateRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12 },
   estimateText: { fontSize: 13, color: colors.primary, fontWeight: '600' },

@@ -7,9 +7,12 @@ const upload = require('../middleware/upload.middleware');
 const { createJobSchema, updateJobSchema } = require('../validators/schemas');
 
 router.get('/categories', jobs.getCategories);
+router.get('/saved', authenticate, jobs.getSavedJobs);
 router.get('/', jobs.getAll);
 router.get('/my', authenticate, authorize('customer'), jobs.getMyJobs);
 router.get('/:id', jobs.getById);
+router.post('/:id/save', authenticate, jobs.saveJob);
+router.delete('/:id/save', authenticate, jobs.unsaveJob);
 // Accept both JSON and multipart/form-data (for photo uploads)
 const optionalUpload = (req, res, next) => {
   if (req.is('multipart/form-data')) {

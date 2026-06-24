@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Alert, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { getMyBids, startWork, markJobComplete } from '../../api/jobs.api';
 import { colors, radius, shadows, typography, statusConfig } from '../../theme';
@@ -105,8 +106,9 @@ export default function MyBidsScreen() {
 
         <View style={styles.cardFooter}>
           <View style={[styles.jobStatusBadge, { backgroundColor: jobStatus.bg }]}>
+            <Ionicons name={jobStatus.icon} size={11} color={jobStatus.color} style={{ marginRight: 4 }} />
             <Text style={[styles.jobStatusText, { color: jobStatus.color }]}>
-              {jobStatus.icon} {jobStatus.label}
+              {jobStatus.label}
             </Text>
           </View>
         </View>
@@ -205,7 +207,7 @@ const styles = StyleSheet.create({
   detailValueSmall: { fontSize: 14, fontWeight: '600', color: colors.text },
 
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
-  jobStatusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full },
+  jobStatusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full },
   jobStatusText: { fontSize: 11, fontWeight: '600' },
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   startBtn: {
