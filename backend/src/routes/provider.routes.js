@@ -80,6 +80,56 @@ router.get('/nearby-jobs', async (req, res, next) => {
   }
 });
 
+// Recommended jobs — matched to the provider's skills and recent activity
+router.get('/recommended-jobs', async (req, res, next) => {
+  try {
+    const [[profile]] = await db.query(
+      'SELECT skills, location_lat, location_lng, service_radius_km FROM provider_profiles WHERE user_id = ?',
+      [req.user.id]
+    );
+
+    let skills = [];
+    if (profile?.skills) {
+      try {
+        skills = Array.isArray(profile.skills) ? profile.skills : JSON.parse(profile.skills);
+      } catch { skills = []; }
+    }
+
+    // No skills configured → fall back to the most recent open jobs
+    if (!skills.length) {
+      const [jobs] = await db.query(
+        `SELECT j.*, c.name as category_name, NULL as relevance
+         FROM jobs j LEFT JOIN categories c ON j.category_id = c.id
+         WHERE j.status = 'open'
+         ORDER BY j.created_at DESC LIMIT 20`
+      );
+      return res.json({ jobs, matched: false });
+    }
+
+    // Boolean-mode fulltext over the skill keywords, plus category-name matching
+    const cleaned = skills.map((s) => String(s).replace(/[+\-<>()~*"@]/g, '').trim()).filter(Boolean);
+    const booleanQuery = cleaned.map((w) => `${w.split(/\s+/)[0]}*`).join(' ');
+    const catConds = cleaned.map(() => 'c.name LIKE ?').join(' OR ');
+    const catParams = cleaned.map((s) => `%${s}%`);
+
+    const [jobs] = await db.query(
+      `SELECT j.*, c.name as category_name,
+              MATCH(j.title, j.description) AGAINST(? IN BOOLEAN MODE) as relevance
+       FROM jobs j
+       LEFT JOIN categories c ON j.category_id = c.id
+       WHERE j.status = 'open'
+         AND (MATCH(j.title, j.description) AGAINST(? IN BOOLEAN MODE) ${catConds ? 'OR ' + catConds : ''})
+       ORDER BY relevance DESC, j.created_at DESC
+       LIMIT 20`,
+      [booleanQuery, booleanQuery, ...catParams]
+    );
+
+    res.json({ jobs, matched: true, skills: cleaned });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Earnings history
 router.get('/earnings', async (req, res, next) => {
   try {

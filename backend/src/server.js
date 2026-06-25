@@ -25,7 +25,7 @@ const server = http.createServer(app);
 // Socket.io
 const io = new Server(server, {
   cors: {
-    origin: [config.clientUrl, config.adminUrl],
+    origin: [config.clientUrl, config.adminUrl, 'http://localhost:8081', 'http://localhost:8082', 'http://localhost:5174'],
     methods: ['GET', 'POST'],
   },
 });

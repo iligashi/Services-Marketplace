@@ -4,7 +4,7 @@ import { getBidsForJob, acceptBid, rejectBid } from '../../api/jobs.api';
 import BidCard from '../../components/BidCard';
 import { colors, typography } from '../../theme';
 
-export default function BidsScreen({ route }) {
+export default function BidsScreen({ route, navigation }) {
   const { jobId } = route.params;
   const [bids, setBids] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,12 @@ export default function BidsScreen({ route }) {
         data={bids}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <BidCard bid={item} onAccept={() => handleAccept(item.id)} onReject={() => handleReject(item.id)} />
+          <BidCard
+            bid={item}
+            onAccept={() => handleAccept(item.id)}
+            onReject={() => handleReject(item.id)}
+            onViewProfile={() => navigation.navigate('ProviderProfile', { userId: item.provider_id, name: item.provider_name })}
+          />
         )}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadBids} tintColor={colors.primary} />}
         ListHeaderComponent={bids.length > 0 ? (

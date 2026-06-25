@@ -6,6 +6,7 @@ import api from '../../api/axios.instance';
 import StarRating from '../../components/StarRating';
 import { radius, shadows } from '../../theme';
 import { useTheme } from '../../context/ThemeContext';
+import NotificationBell from '../../components/NotificationBell';
 
 export default function DashboardScreen() {
   const { colors } = useTheme();
@@ -70,8 +71,11 @@ export default function DashboardScreen() {
             </Text>
           ) : null}
         </View>
-        <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}>
-          <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>{user?.name?.charAt(0)?.toUpperCase() || 'P'}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <NotificationBell light />
+          <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}>
+            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>{user?.name?.charAt(0)?.toUpperCase() || 'P'}</Text>
+          </View>
         </View>
       </View>
 

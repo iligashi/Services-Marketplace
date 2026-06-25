@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { getJobById } from '../../api/jobs.api';
 import { confirmCompletion } from '../../api/payments.api';
 import { colors, radius, shadows, typography, statusConfig } from '../../theme';
+import JobStatusTimeline from '../../components/JobStatusTimeline';
 
-const BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://192.168.0.127:5000';
+const BASE_URL = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://192.168.0.127:3000';
 
 export default function JobDetailScreen({ route, navigation }) {
   const { jobId } = route.params;
@@ -50,7 +52,7 @@ export default function JobDetailScreen({ route, navigation }) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={[styles.statusBanner, { backgroundColor: status.bg }]}>
-        <Text style={[styles.statusIcon, { color: status.color }]}>{status.icon}</Text>
+        <Ionicons name={status.icon} size={14} color={status.color} />
         <Text style={[styles.statusLabel, { color: status.color }]}>{status.label}</Text>
       </View>
 
@@ -64,6 +66,13 @@ export default function JobDetailScreen({ route, navigation }) {
         <Text style={styles.postedBy}>
           {`Posted by ${job.customer_name} \u00B7 ${new Date(job.created_at).toLocaleDateString()}`}
         </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{'Progress'}</Text>
+        <View style={styles.timelineCard}>
+          <JobStatusTimeline job={job} />
+        </View>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.detailCards}>
@@ -105,12 +114,17 @@ export default function JobDetailScreen({ route, navigation }) {
       {job.provider_name ? (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{'Assigned Provider'}</Text>
-          <View style={styles.providerCard}>
+          <TouchableOpacity
+            style={styles.providerCard}
+            onPress={() => navigation.navigate('ProviderProfile', { userId: job.provider_id, name: job.provider_name })}
+            activeOpacity={0.7}
+          >
             <View style={styles.providerAvatar}>
               <Text style={styles.providerInitial}>{job.provider_name.charAt(0).toUpperCase()}</Text>
             </View>
             <Text style={styles.providerName}>{job.provider_name}</Text>
-          </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
         </View>
       ) : null}
 
@@ -188,6 +202,11 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.caption, marginBottom: 10 },
   description: { ...typography.body, lineHeight: 24, color: colors.text },
 
+  timelineCard: {
+    backgroundColor: colors.white, padding: 18, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.border, ...shadows.sm,
+  },
+
   locationCard: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: colors.white, padding: 16, borderRadius: radius.lg,
@@ -206,7 +225,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center',
   },
   providerInitial: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  providerName: { ...typography.h3 },
+  providerName: { ...typography.h3, flex: 1 },
 
   photo: { width: 180, height: 140, borderRadius: radius.lg, marginRight: 10 },
 

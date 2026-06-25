@@ -284,3 +284,45 @@ exports.getCategories = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.saveJob = async (req, res, next) => {
+  try {
+    await db.query(
+      'INSERT IGNORE INTO saved_jobs (user_id, job_id) VALUES (?, ?)',
+      [req.user.id, req.params.id]
+    );
+    res.json({ message: 'Job saved', saved: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.unsaveJob = async (req, res, next) => {
+  try {
+    await db.query('DELETE FROM saved_jobs WHERE user_id = ? AND job_id = ?', [req.user.id, req.params.id]);
+    res.json({ message: 'Job removed from saved', saved: false });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getSavedJobs = async (req, res, next) => {
+  try {
+    const [jobs] = await db.query(
+      `SELECT j.*, c.name as category_name, c.slug as category_slug,
+              u.name as customer_name, u.avatar_url as customer_avatar,
+              s.created_at as saved_at,
+              (SELECT COUNT(*) FROM bids WHERE job_id = j.id) as bid_count
+       FROM saved_jobs s
+       JOIN jobs j ON s.job_id = j.id
+       LEFT JOIN categories c ON j.category_id = c.id
+       LEFT JOIN users u ON j.customer_id = u.id
+       WHERE s.user_id = ?
+       ORDER BY s.created_at DESC`,
+      [req.user.id]
+    );
+    res.json({ jobs });
+  } catch (err) {
+    next(err);
+  }
+};
