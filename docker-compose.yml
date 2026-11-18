@@ -38,6 +38,8 @@ services:
       - DB_USER=${MYSQL_USER:-services_app}
       - DB_PASSWORD=${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in the root .env file}
       - DB_NAME=services_marketplace
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the root .env file}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in the root .env file}
       - REDIS_HOST=redis
     depends_on:
       - mysql

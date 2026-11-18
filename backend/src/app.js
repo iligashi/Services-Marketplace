@@ -6,6 +6,7 @@ const path = require('path');
 const config = require('./config/env');
 const { errorHandler } = require('./middleware/error.middleware');
 const logger = require('./utils/logger');
+const { createRateLimitStore } = require('./config/rate-limit-store');
 
 const app = express();
 
@@ -17,13 +18,17 @@ app.use(cors({
 }));
 
 // Rate limiting — global baseline, with stricter limits on sensitive routes below
+// Counters live in Redis when REDIS_URL/REDIS_HOST is set, so limits hold
+// across restarts and multiple API instances.
 const globalLimiter = rateLimit({
+  store: createRateLimitStore('global'),
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: { error: 'Too many requests, try again later' },
 });
 
 const authLimiter = rateLimit({
+  store: createRateLimitStore('auth'),
   windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
@@ -32,6 +37,7 @@ const authLimiter = rateLimit({
 });
 
 const paymentLimiter = rateLimit({
+  store: createRateLimitStore('payments'),
   windowMs: 15 * 60 * 1000,
   max: 30,
   standardHeaders: true,
