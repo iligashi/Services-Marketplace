@@ -20,6 +20,7 @@ const AUTO_RELEASE_AFTER_HOURS = 72;
 
 const captureKey = (paymentId) => `escrow-capture-${paymentId}`;
 const transferKey = (paymentId) => `escrow-transfer-${paymentId}`;
+const transferGroup = (paymentId) => `escrow-payment-${paymentId}`;
 
 function createEscrowService({ db, stripe, logger }) {
   // A payment row is created as 'pending' and only becomes 'held' once Stripe
@@ -60,6 +61,15 @@ function createEscrowService({ db, stripe, logger }) {
 
     if (payment.stripe_transfer_id) return payment.stripe_transfer_id;
 
+    // Idempotency keys expire after 24h. If an earlier attempt created the
+    // transfer but its id was never recorded, find it by its transfer group
+    // instead of relying on the key, so a late resume cannot pay twice.
+    const existing = await stripe.transfers.list({ transfer_group: transferGroup(payment.id), limit: 1 });
+    if (existing.data.length > 0) {
+      await db.query('UPDATE payments SET stripe_transfer_id = ? WHERE id = ?', [existing.data[0].id, payment.id]);
+      return existing.data[0].id;
+    }
+
     const [profiles] = await db.query('SELECT stripe_account_id FROM provider_profiles WHERE user_id = ?', [payment.provider_id]);
     const destination = profiles[0]?.stripe_account_id;
     if (!destination) return null;
@@ -69,6 +79,7 @@ function createEscrowService({ db, stripe, logger }) {
         amount: Math.round(Number(payment.provider_payout) * 100),
         currency: 'usd',
         destination,
+        transfer_group: transferGroup(payment.id),
         metadata: { job_id: String(payment.job_id), payment_id: String(payment.id) },
       },
       { idempotencyKey: transferKey(payment.id) }

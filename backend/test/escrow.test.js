@@ -10,6 +10,7 @@ const { createEscrowService, captureKey, transferKey } = require('../src/service
 function fakeDb({ payments = [], jobs = [], profiles = [] }) {
   const state = { payments, jobs, profiles, transactions: { committed: 0, rolledBack: 0 } };
   let failNextFinalise = false;
+  let failNextTransferRecord = false;
 
   async function query(sql, params = []) {
     const s = sql.replace(/\s+/g, ' ').trim();
@@ -33,6 +34,10 @@ function fakeDb({ payments = [], jobs = [], profiles = [] }) {
       return [{ affectedRows: p ? 1 : 0 }];
     }
     if (s.startsWith('UPDATE payments SET stripe_transfer_id = ?')) {
+      if (failNextTransferRecord) {
+        failNextTransferRecord = false;
+        throw new Error('database went away');
+      }
       state.payments.find((x) => x.id === params[1]).stripe_transfer_id = params[0];
       return [{ affectedRows: 1 }];
     }
@@ -71,6 +76,9 @@ function fakeDb({ payments = [], jobs = [], profiles = [] }) {
     failFinaliseOnce: () => {
       failNextFinalise = true;
     },
+    failTransferRecordOnce: () => {
+      failNextTransferRecord = true;
+    },
     query,
     async getConnection() {
       return {
@@ -94,6 +102,10 @@ function fakeStripe(intentStatus = 'requires_capture') {
   const idempotent = new Map();
   let transfers = 0;
   let failTransfersRemaining = 0;
+  let captures = 0;
+  const created = [];
+  let loseNextCaptureResponse = false;
+  let loseNextTransferResponse = false;
   const intents = new Map();
   const remember = (key, fn) => {
     if (!idempotent.has(key)) idempotent.set(key, fn());
@@ -104,26 +116,57 @@ function fakeStripe(intentStatus = 'requires_capture') {
     failNextTransfer: () => {
       failTransfersRemaining = 1;
     },
+    // The call takes effect at Stripe, but the API response never arrives
+    loseNextCaptureResponse: () => {
+      loseNextCaptureResponse = true;
+    },
+    loseNextTransferResponse: () => {
+      loseNextTransferResponse = true;
+    },
+    captureCount: () => captures,
+    // Stripe forgets idempotency keys after 24 hours
+    expireIdempotencyKeys: () => idempotent.clear(),
     paymentIntents: {
       async retrieve(id) {
         return { id, status: intents.get(id) || intentStatus };
       },
       async capture(id, _params, { idempotencyKey }) {
         calls.capture.push(idempotencyKey);
-        return remember(idempotencyKey, () => {
+        if (intents.get(id) === 'succeeded' && !idempotent.has(idempotencyKey)) {
+          throw new Error('This PaymentIntent has already been captured');
+        }
+        const result = remember(idempotencyKey, () => {
+          captures += 1;
           intents.set(id, 'succeeded');
           return { id, status: 'succeeded' };
         });
+        if (loseNextCaptureResponse) {
+          loseNextCaptureResponse = false;
+          throw new Error('socket hang up');
+        }
+        return result;
       },
     },
     transfers: {
+      async list({ transfer_group }) {
+        return { data: created.filter((t) => t.transfer_group === transfer_group) };
+      },
       async create(params, { idempotencyKey }) {
         calls.transfer.push(idempotencyKey);
         if (failTransfersRemaining > 0) {
           failTransfersRemaining -= 1;
           throw new Error('Stripe unavailable');
         }
-        return remember(idempotencyKey, () => ({ id: `tr_${++transfers}`, amount: params.amount }));
+        const result = remember(idempotencyKey, () => {
+          const transfer = { id: `tr_${++transfers}`, amount: params.amount, transfer_group: params.transfer_group };
+          created.push(transfer);
+          return transfer;
+        });
+        if (loseNextTransferResponse) {
+          loseNextTransferResponse = false;
+          throw new Error('socket hang up');
+        }
+        return result;
       },
     },
     transferCount: () => transfers,
@@ -225,4 +268,90 @@ test('the hourly job releases overdue held payments', async () => {
   await escrow.autoReleasePayments();
 
   assert.equal(db.state.payments[0].status, 'released');
+});
+
+// Crash at every stage of a release, then let the hourly job resume it.
+// Whatever the failure point, the end state must be: released once,
+// captured once, one transfer, job completed once.
+const assertReleasedExactlyOnce = (db, stripe) => {
+  assert.equal(db.state.payments[0].status, 'released');
+  assert.equal(db.state.payments[0].stripe_transfer_id, 'tr_1');
+  assert.equal(stripe.captureCount(), 1, 'captured exactly once');
+  assert.equal(stripe.transferCount(), 1, 'paid out exactly once');
+  assert.equal(db.state.jobs[0].status, 'completed');
+  assert.equal(db.state.profiles[0].total_jobs_done, 1);
+};
+
+const crashStages = [
+  {
+    name: 'capture request fails before reaching Stripe',
+    inject: ({ stripe }) => {
+      const original = stripe.paymentIntents.capture;
+      stripe.paymentIntents.capture = async () => {
+        stripe.paymentIntents.capture = original;
+        throw new Error('ECONNRESET');
+      };
+    },
+    capturedBeforeResume: 0,
+  },
+  {
+    name: 'capture succeeds at Stripe but the response is lost',
+    inject: ({ stripe }) => stripe.loseNextCaptureResponse(),
+    capturedBeforeResume: 1,
+  },
+  {
+    name: 'capture succeeds, transfer request fails',
+    inject: ({ stripe }) => stripe.failNextTransfer(),
+    capturedBeforeResume: 1,
+  },
+  {
+    name: 'transfer succeeds at Stripe but the response is lost',
+    inject: ({ stripe }) => stripe.loseNextTransferResponse(),
+    capturedBeforeResume: 1,
+  },
+  {
+    name: 'transfer succeeds, recording the transfer id in the DB fails',
+    inject: ({ db }) => db.failTransferRecordOnce(),
+    capturedBeforeResume: 1,
+  },
+  {
+    name: 'capture and transfer succeed, final DB transaction fails',
+    inject: ({ db }) => db.failFinaliseOnce(),
+    capturedBeforeResume: 1,
+  },
+];
+
+for (const stage of crashStages) {
+  test(`crash recovery: ${stage.name}`, async () => {
+    const { db, stripe, escrow } = scenario();
+    stage.inject({ db, stripe });
+
+    await assert.rejects(escrow.releaseEscrowForJob(1));
+    assert.equal(db.state.payments[0].status, 'releasing', 'payment is parked, not lost');
+    assert.equal(db.state.jobs[0].status, 'in_progress', 'job is not completed before money moves');
+    assert.equal(stripe.captureCount(), stage.capturedBeforeResume);
+
+    // A user retrying in the meantime must not start a second release
+    assert.deepEqual(await escrow.releaseEscrowForJob(1), { released: false, inProgress: true });
+
+    db.state.payments[0].stale = true;
+    await escrow.resumeStuckReleases();
+    assertReleasedExactlyOnce(db, stripe);
+
+    // Running the recovery job again is a no-op
+    await escrow.resumeStuckReleases();
+    assertReleasedExactlyOnce(db, stripe);
+  });
+}
+
+test('a release resumed after idempotency keys expired still pays out only once', async () => {
+  const { db, stripe, escrow } = scenario();
+  stripe.loseNextTransferResponse();
+  await assert.rejects(escrow.releaseEscrowForJob(1));
+
+  stripe.expireIdempotencyKeys(); // resume more than 24h later
+  db.state.payments[0].stale = true;
+  await escrow.resumeStuckReleases();
+
+  assertReleasedExactlyOnce(db, stripe);
 });
