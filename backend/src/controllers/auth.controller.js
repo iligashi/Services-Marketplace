@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const config = require('../config/env');
 const { AppError } = require('../middleware/error.middleware');
+const { assertAccountActive } = require('../services/account-status');
 const { getBadge } = require('../services/reputation.service');
 const { registerPushToken } = require('../services/notification.service');
 
@@ -71,6 +72,7 @@ exports.login = async (req, res, next) => {
     if (!isMatch) {
       throw new AppError('Invalid email or password', 401);
     }
+    assertAccountActive(user);
 
     const tokens = generateTokens(user);
     await db.query('UPDATE users SET refresh_token = ? WHERE id = ?', [tokens.refreshToken, user.id]);
@@ -105,6 +107,7 @@ exports.refreshToken = async (req, res, next) => {
     }
 
     const user = rows[0];
+    assertAccountActive(user);
     const tokens = generateTokens(user);
     await db.query('UPDATE users SET refresh_token = ? WHERE id = ?', [tokens.refreshToken, user.id]);
 

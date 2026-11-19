@@ -1,28 +1,15 @@
-const jwt = require('jsonwebtoken');
 const config = require('../config/env');
 const db = require('../config/db');
 const logger = require('../utils/logger');
 const { createNotification } = require('../services/notification.service');
+const { createSocketAuth, userRoom } = require('./socket-auth');
 
 function initSocket(io) {
-  // Auth middleware for socket connections
-  io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-      return next(new Error('Authentication required'));
-    }
-    try {
-      const decoded = jwt.verify(token, config.jwt.secret);
-      socket.userId = decoded.id;
-      socket.userRole = decoded.role;
-      next();
-    } catch (err) {
-      next(new Error('Invalid token'));
-    }
-  });
+  io.use(createSocketAuth({ db, secret: config.jwt.secret, logger }));
 
   io.on('connection', (socket) => {
     logger.debug(`User ${socket.userId} connected via socket`);
+    socket.join(userRoom(socket.userId));
 
     // Join a job's chat room
     socket.on('join_room', async (jobId) => {

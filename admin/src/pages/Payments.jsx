@@ -4,14 +4,31 @@ import api from '../api';
 export default function Payments() {
   const [payments, setPayments] = useState([]);
 
+  const [retrying, setRetrying] = useState(null);
+
+  const load = () => api.get('/admin/payments').then(({ data }) => setPayments(data.payments));
+
   useEffect(() => {
-    api.get('/admin/payments').then(({ data }) => setPayments(data.payments));
+    load();
   }, []);
+
+  const retryRelease = async (id) => {
+    setRetrying(id);
+    try {
+      await api.post(`/admin/payments/${id}/retry-release`);
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Retry failed');
+    } finally {
+      setRetrying(null);
+      load();
+    }
+  };
 
   const statusColor = {
     pending: '#dfe6e9',
     held: '#ffeaa7',
     releasing: '#81ecec',
+    release_failed: '#ff7675',
     released: '#55efc4',
     refunded: '#fab1a0',
     disputed: '#ff7675',
@@ -45,6 +62,17 @@ export default function Payments() {
               <span style={{ ...styles.badge, background: statusColor[p.status] || '#dfe6e9' }}>
                 {p.status}
               </span>
+              {p.status === 'release_failed' && (
+                <button
+                  type="button"
+                  style={styles.retry}
+                  title={p.release_error || undefined}
+                  disabled={retrying === p.id}
+                  onClick={() => retryRelease(p.id)}
+                >
+                  {retrying === p.id ? 'Retrying…' : 'Retry payout'}
+                </button>
+              )}
             </span>
             <span style={{ ...styles.cell, color: '#636e72', fontSize: 13 }}>
               {new Date(p.created_at).toLocaleDateString()}
@@ -63,5 +91,6 @@ const styles = {
   row: { display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #f0f2f5' },
   headerRow: { background: '#f8f9fa', fontWeight: 600, fontSize: 13, color: '#636e72', textTransform: 'uppercase' },
   cell: { flex: 1, fontSize: 14 },
+  retry: { marginLeft: 8, padding: '3px 8px', borderRadius: 4, border: '1px solid #d63031', background: '#fff', color: '#d63031', fontSize: 12, cursor: 'pointer' },
   badge: { padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, textTransform: 'uppercase' },
 };

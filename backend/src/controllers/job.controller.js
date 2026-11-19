@@ -4,16 +4,30 @@ const { paginate, paginationMeta } = require('../utils/pagination');
 const { releaseEscrowForJob } = require('../services/escrow.service');
 const { createNotification } = require('../services/notification.service');
 
+// Shared by the customer and provider confirmation endpoints: only report
+// completion (and a released payment) when that actually happened.
+function completionResponse(result) {
+  if (!result.completed) {
+    return { message: 'Both parties confirmed — the payout is being processed', status: 'releasing' };
+  }
+  if (!result.released) {
+    return { message: 'Both parties confirmed — job completed (settled outside escrow)', status: 'completed' };
+  }
+  return { message: 'Both parties confirmed — job completed and payment released', status: 'completed' };
+}
+exports.completionResponse = completionResponse;
+
 exports.create = async (req, res, next) => {
   try {
     const { title, description, category_id, budget, location_lat, location_lng, location_address, deadline } = req.body;
+    const paymentMode = req.body.payment_mode === 'cash' ? 'cash' : 'online_escrow';
 
     const photos = req.files ? req.files.map((f) => `/uploads/${f.filename}`) : [];
 
     const [result] = await db.query(
-      `INSERT INTO jobs (customer_id, category_id, title, description, budget, location_lat, location_lng, location_address, photos, deadline)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, category_id || null, title, description, budget || null, location_lat || null, location_lng || null, location_address || null, JSON.stringify(photos), deadline || null]
+      `INSERT INTO jobs (customer_id, category_id, title, description, budget, location_lat, location_lng, location_address, photos, deadline, payment_mode)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, category_id || null, title, description, budget || null, location_lat || null, location_lng || null, location_address || null, JSON.stringify(photos), deadline || null, paymentMode]
     );
 
     res.status(201).json({ message: 'Job posted', job_id: result.insertId });
@@ -234,9 +248,12 @@ exports.markComplete = async (req, res, next) => {
 
     if (job.customer_confirmed_at) {
       // Both sides have confirmed — release escrow now
-      await releaseEscrowForJob(req.params.id);
-      await createNotification(job.customer_id, 'job_completed', 'Job completed', `"${job.title}" is complete and payment has been released.`, { job_id: req.params.id });
-      return res.json({ message: 'Both parties confirmed — job completed and payment released', status: 'completed' });
+      const result = await releaseEscrowForJob(req.params.id);
+      if (!result.completed) {
+        return res.status(202).json(completionResponse(result));
+      }
+      await createNotification(job.customer_id, 'job_completed', 'Job completed', `"${job.title}" is complete${result.released ? ' and payment has been released' : ''}.`, { job_id: req.params.id });
+      return res.json(completionResponse(result));
     }
 
     await createNotification(job.customer_id, 'completion_pending', 'Provider marked job done', `The provider says "${job.title}" is complete. Please confirm to release payment.`, { job_id: req.params.id });
