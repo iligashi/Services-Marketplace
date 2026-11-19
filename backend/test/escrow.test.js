@@ -1,7 +1,8 @@
 process.env.NODE_ENV = 'test';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createEscrowService, captureKey, transferKey } = require('../src/services/escrow.service');
+const { createEscrowService, captureKey, transferKey, MAX_RELEASE_ATTEMPTS } = require('../src/services/escrow.service');
+const { transitionPayment, PaymentTransitionError } = require('../src/services/payment-state');
 
 /**
  * Minimal in-memory stand-in for the mysql2 pool, covering only the
@@ -15,7 +16,8 @@ function fakeDb({ payments = [], jobs = [], profiles = [] }) {
   async function query(sql, params = []) {
     const s = sql.replace(/\s+/g, ' ').trim();
     if (s.startsWith('SELECT * FROM payments WHERE job_id = ?')) {
-      return [state.payments.filter((p) => p.job_id === params[0])];
+      const allowed = s.match(/status IN \(([^)]*)\)/)?.[1].match(/'(\w+)'/g).map((v) => v.slice(1, -1));
+      return [state.payments.filter((p) => p.job_id === params[0] && (!allowed || allowed.includes(p.status)))];
     }
     if (s.startsWith("SELECT * FROM payments WHERE status = 'releasing'")) {
       return [state.payments.filter((p) => p.status === 'releasing' && p.stale)];
@@ -23,14 +25,36 @@ function fakeDb({ payments = [], jobs = [], profiles = [] }) {
     if (s.startsWith('SELECT p.id, p.job_id FROM payments p')) {
       return [state.payments.filter((p) => p.status === 'held' && p.overdue)];
     }
-    if (s.startsWith("UPDATE payments SET status = 'held'")) {
-      const p = state.payments.find((x) => x.id === params[0] && x.status === 'pending');
-      if (p) p.status = 'held';
+    if (s.startsWith('SELECT * FROM payments WHERE id = ?')) {
+      return [state.payments.filter((p) => p.id === params[0])];
+    }
+    if (s.startsWith('SELECT payment_mode FROM jobs')) {
+      return [state.jobs.filter((j) => j.id === params[0])];
+    }
+    // payment-state.js: UPDATE payments SET status = ?[, extra] WHERE id = ? AND status = ?
+    if (s.startsWith('UPDATE payments SET status = ?')) {
+      const [to] = params;
+      const from = params.at(-1);
+      const id = params.at(-2);
+      if (to === 'released' && failNextFinalise) {
+        failNextFinalise = false;
+        throw new Error('database went away');
+      }
+      const p = state.payments.find((x) => x.id === id && x.status === from);
+      if (p) {
+        p.status = to;
+        if (to === 'released') p.stripe_transfer_id = params[1];
+        if (to === 'release_failed') p.release_error = params[1];
+        if (to === 'releasing') p.release_attempts = s.includes('release_attempts = 1') ? 1 : (p.release_attempts || 0) + 1;
+      }
       return [{ affectedRows: p ? 1 : 0 }];
     }
-    if (s.startsWith("UPDATE payments SET status = 'releasing'")) {
-      const p = state.payments.find((x) => x.id === params[0] && x.status === 'held');
-      if (p) p.status = 'releasing';
+    if (s.startsWith('UPDATE payments SET release_started_at = NOW()')) {
+      const p = state.payments.find((x) => x.id === params[0] && x.status === 'releasing' && x.stale);
+      if (p) {
+        p.stale = false;
+        p.release_attempts = (p.release_attempts || 0) + 1;
+      }
       return [{ affectedRows: p ? 1 : 0 }];
     }
     if (s.startsWith('UPDATE payments SET stripe_transfer_id = ?')) {
@@ -40,18 +64,6 @@ function fakeDb({ payments = [], jobs = [], profiles = [] }) {
       }
       state.payments.find((x) => x.id === params[1]).stripe_transfer_id = params[0];
       return [{ affectedRows: 1 }];
-    }
-    if (s.startsWith("UPDATE payments SET status = 'released'")) {
-      if (failNextFinalise) {
-        failNextFinalise = false;
-        throw new Error('database went away');
-      }
-      const p = state.payments.find((x) => x.id === params[1] && x.status === 'releasing');
-      if (p) {
-        p.status = 'released';
-        p.stripe_transfer_id = params[0] || p.stripe_transfer_id;
-      }
-      return [{ affectedRows: p ? 1 : 0 }];
     }
     if (s.startsWith('SELECT stripe_account_id FROM provider_profiles')) {
       return [state.profiles.filter((p) => p.user_id === params[0])];
@@ -107,6 +119,7 @@ function fakeStripe(intentStatus = 'requires_capture') {
   let loseNextCaptureResponse = false;
   let loseNextTransferResponse = false;
   const intents = new Map();
+  const accountTransfers = new Map();
   const remember = (key, fn) => {
     if (!idempotent.has(key)) idempotent.set(key, fn());
     return idempotent.get(key);
@@ -124,6 +137,13 @@ function fakeStripe(intentStatus = 'requires_capture') {
       loseNextTransferResponse = true;
     },
     captureCount: () => captures,
+    // Connected account capability per account id ('active' unless set)
+    accountTransfers,
+    accounts: {
+      async retrieve(id) {
+        return { id, capabilities: { transfers: accountTransfers.get(id) ?? 'active' } };
+      },
+    },
     // Stripe forgets idempotency keys after 24 hours
     expireIdempotencyKeys: () => idempotent.clear(),
     paymentIntents: {
@@ -175,11 +195,13 @@ function fakeStripe(intentStatus = 'requires_capture') {
 
 const quiet = { info() {}, error() {}, warn() {} };
 
-const scenario = (paymentOverrides = {}, intentStatus) => {
+const scenario = (paymentOverrides = {}, intentStatus, { profile = {}, job = {}, noPayment = false } = {}) => {
   const db = fakeDb({
-    payments: [{ id: 10, job_id: 1, provider_id: 7, provider_payout: '88.00', stripe_payment_intent_id: 'pi_1', status: 'held', ...paymentOverrides }],
-    jobs: [{ id: 1, provider_id: 7, status: 'in_progress' }],
-    profiles: [{ user_id: 7, stripe_account_id: 'acct_7', total_jobs_done: 0 }],
+    payments: noPayment
+      ? []
+      : [{ id: 10, job_id: 1, provider_id: 7, provider_payout: '88.00', stripe_payment_intent_id: 'pi_1', status: 'held', release_attempts: 0, ...paymentOverrides }],
+    jobs: [{ id: 1, provider_id: 7, status: 'in_progress', payment_mode: 'online_escrow', ...job }],
+    profiles: [{ user_id: 7, stripe_account_id: 'acct_7', total_jobs_done: 0, ...profile }],
   });
   const stripe = fakeStripe(intentStatus);
   return { db, stripe, escrow: createEscrowService({ db, stripe, logger: quiet }) };
@@ -188,7 +210,7 @@ const scenario = (paymentOverrides = {}, intentStatus) => {
 test('release captures, pays the provider once and completes the job', async () => {
   const { db, stripe, escrow } = scenario();
 
-  assert.deepEqual(await escrow.releaseEscrowForJob(1), { released: true });
+  assert.deepEqual(await escrow.releaseEscrowForJob(1), { released: true, completed: true });
 
   assert.equal(db.state.payments[0].status, 'released');
   assert.equal(db.state.payments[0].stripe_transfer_id, 'tr_1');
@@ -354,4 +376,136 @@ test('a release resumed after idempotency keys expired still pays out only once'
   await escrow.resumeStuckReleases();
 
   assertReleasedExactlyOnce(db, stripe);
+});
+
+// --- Settlement guarantees ------------------------------------------------
+
+const assertNothingMoved = (db, stripe) => {
+  assert.equal(stripe.captureCount(), 0, 'customer funds were not captured');
+  assert.equal(stripe.transferCount(), 0, 'no transfer was attempted');
+  assert.equal(db.state.jobs[0].status, 'in_progress', 'job was not completed');
+  assert.equal(db.state.profiles[0].total_jobs_done, 0);
+};
+
+test('a provider without a Stripe account is never released, and nothing is captured', async () => {
+  const { db, stripe, escrow } = scenario({}, undefined, { profile: { stripe_account_id: null } });
+
+  await assert.rejects(escrow.releaseEscrowForJob(1), (err) => err.statusCode === 409);
+
+  assertNothingMoved(db, stripe);
+  assert.equal(db.state.payments[0].status, 'release_failed');
+  assert.match(db.state.payments[0].release_error, /no connected Stripe account/);
+});
+
+test('a connected account that cannot receive transfers is rejected before capture', async () => {
+  const { db, stripe, escrow } = scenario();
+  stripe.accountTransfers.set('acct_7', 'inactive');
+
+  await assert.rejects(escrow.releaseEscrowForJob(1), (err) => err.statusCode === 409);
+
+  assertNothingMoved(db, stripe);
+  assert.equal(db.state.payments[0].status, 'release_failed');
+});
+
+test('a failed release is not retried by users, and an admin retry pays out once the account is fixed', async () => {
+  const { db, stripe, escrow } = scenario({}, undefined, { profile: { stripe_account_id: null } });
+  await assert.rejects(escrow.releaseEscrowForJob(1));
+
+  await assert.rejects(escrow.releaseEscrowForJob(1), (err) => err.statusCode === 409);
+  await escrow.resumeStuckReleases(); // the hourly job leaves it alone
+  assert.equal(db.state.payments[0].status, 'release_failed');
+
+  db.state.profiles[0].stripe_account_id = 'acct_7';
+  assert.deepEqual(await escrow.retryFailedRelease(10), { released: true });
+  assertReleasedExactlyOnce(db, stripe);
+
+  await assert.rejects(escrow.retryFailedRelease(10), (err) => err.statusCode === 409);
+});
+
+test('a transfer response without an id does not complete the job', async () => {
+  const { db, stripe, escrow } = scenario();
+  stripe.transfers.create = async () => ({});
+
+  await assert.rejects(escrow.releaseEscrowForJob(1), /no transfer/);
+
+  assert.equal(db.state.payments[0].status, 'releasing', 'left for the resume job');
+  assert.equal(db.state.payments[0].stripe_transfer_id, undefined);
+  assert.equal(db.state.jobs[0].status, 'in_progress');
+});
+
+test('without Stripe configured a release fails instead of completing silently', async () => {
+  const { db } = scenario();
+  const escrow = createEscrowService({ db, stripe: null, logger: quiet });
+
+  await assert.rejects(escrow.releaseEscrowForJob(1), (err) => err.statusCode === 409);
+  assert.equal(db.state.payments[0].status, 'release_failed');
+  assert.equal(db.state.jobs[0].status, 'in_progress');
+});
+
+test('repeated transient failures end in release_failed instead of retrying forever', async () => {
+  const { db, stripe, escrow } = scenario({ status: 'releasing', stale: true, release_attempts: MAX_RELEASE_ATTEMPTS });
+
+  await escrow.resumeStuckReleases();
+
+  assert.equal(db.state.payments[0].status, 'release_failed');
+  assert.match(db.state.payments[0].release_error, /Gave up/);
+  assertNothingMoved(db, stripe);
+});
+
+test('finalising rolls back the job update when the payment changed state underneath it', async () => {
+  const { db, stripe, escrow } = scenario();
+  const create = stripe.transfers.create;
+  stripe.transfers.create = async (...args) => {
+    const transfer = await create(...args);
+    db.state.payments[0].status = 'disputed'; // e.g. a webhook moved it meanwhile
+    return transfer;
+  };
+
+  await assert.rejects(escrow.releaseEscrowForJob(1), PaymentTransitionError);
+
+  assert.equal(db.state.payments[0].status, 'disputed');
+  assert.equal(db.state.jobs[0].status, 'in_progress');
+  assert.equal(db.state.transactions.rolledBack, 1);
+  assert.equal(db.state.transactions.committed, 0);
+});
+
+test('illegal transitions are refused before touching the database', async () => {
+  let queried = false;
+  const conn = {
+    query: async () => {
+      queried = true;
+      return [{ affectedRows: 1 }];
+    },
+  };
+
+  await assert.rejects(transitionPayment(conn, { id: 1, from: 'pending', to: 'released' }), PaymentTransitionError);
+  await assert.rejects(transitionPayment(conn, { id: 1, from: 'released', to: 'releasing' }), PaymentTransitionError);
+  assert.equal(queried, false);
+});
+
+// --- Jobs without an escrow payment -----------------------------------------
+
+test('an online job with no payment record cannot be completed', async () => {
+  const { db, escrow } = scenario({}, undefined, { noPayment: true });
+
+  await assert.rejects(escrow.releaseEscrowForJob(1), (err) => err.statusCode === 409);
+  assert.equal(db.state.jobs[0].status, 'in_progress');
+});
+
+test('an online job whose payment failed or was refunded cannot be completed', async () => {
+  for (const status of ['failed', 'refunded']) {
+    const { db, escrow } = scenario({ status });
+    await assert.rejects(escrow.releaseEscrowForJob(1), (err) => err.statusCode === 409);
+    assert.equal(db.state.jobs[0].status, 'in_progress');
+  }
+});
+
+test('a cash job completes without a payment and without touching Stripe', async () => {
+  const { db, stripe, escrow } = scenario({}, undefined, { noPayment: true, job: { payment_mode: 'cash' } });
+
+  assert.deepEqual(await escrow.releaseEscrowForJob(1), { released: false, completed: true, settlement: 'cash' });
+
+  assert.equal(db.state.jobs[0].status, 'completed');
+  assert.equal(db.state.profiles[0].total_jobs_done, 1);
+  assert.equal(stripe.captureCount(), 0);
 });

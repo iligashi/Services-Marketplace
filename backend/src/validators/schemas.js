@@ -34,6 +34,8 @@ exports.createJobSchema = Joi.object({
   location_lng: Joi.number().min(-180).max(180).allow(null),
   location_address: Joi.string().max(500).allow('', null),
   deadline: Joi.date().iso().allow(null),
+  // 'manual' is reserved for admins (see PATCH /admin/jobs/:id/payment-mode)
+  payment_mode: Joi.string().valid('online_escrow', 'cash').default('online_escrow'),
 });
 
 exports.updateJobSchema = Joi.object({

@@ -5,6 +5,7 @@ const { AppError } = require('../middleware/error.middleware');
 const { getFeeRate } = require('../services/reputation.service');
 const { releaseEscrowForJob } = require('../services/escrow.service');
 const { createNotification } = require('../services/notification.service');
+const { completionResponse } = require('./job.controller');
 
 // Idempotent: repeating the request (double tap, network retry) returns the
 // same PaymentIntent instead of creating a second charge. One payment row per
@@ -46,11 +47,18 @@ exports.createPaymentIntent = async (req, res, next) => {
     if (job.status !== 'assigned') {
       throw new AppError('Job is not awaiting payment', 409);
     }
+    if (job.payment_mode !== 'online_escrow') {
+      throw new AppError(`This job is settled outside escrow (${job.payment_mode})`, 409);
+    }
 
     const [providerProfiles] = await db.query(
-      'SELECT avg_rating, total_jobs_done, id_verified FROM provider_profiles WHERE user_id = ?',
+      'SELECT avg_rating, total_jobs_done, id_verified, stripe_account_id FROM provider_profiles WHERE user_id = ?',
       [job.provider_id]
     );
+    // Do not take the customer's money for a provider who cannot be paid out
+    if (!providerProfiles[0]?.stripe_account_id) {
+      throw new AppError('This provider has not set up payouts yet, so the job cannot be paid online', 409);
+    }
     const feeRate = getFeeRate(providerProfiles[0]);
 
     const amount = Math.round(Number(job.bid_amount) * 100); // cents
@@ -156,11 +164,15 @@ exports.confirmCompletion = async (req, res, next) => {
 
     if (job.provider_confirmed_at) {
       // Both sides have confirmed — release escrow now
-      await releaseEscrowForJob(job_id);
-      if (job.provider_id) {
-        await createNotification(job.provider_id, 'job_completed', 'Job completed', `Payment for "${job.title}" has been released.`, { job_id });
+      const result = await releaseEscrowForJob(job_id);
+      if (!result.completed) {
+        return res.status(202).json(completionResponse(result));
       }
-      return res.json({ message: 'Both parties confirmed — job completed and payment released', status: 'completed' });
+      if (job.provider_id) {
+        const body = result.released ? `Payment for "${job.title}" has been released.` : `"${job.title}" is complete.`;
+        await createNotification(job.provider_id, 'job_completed', 'Job completed', body, { job_id });
+      }
+      return res.json(completionResponse(result));
     }
 
     if (job.provider_id) {

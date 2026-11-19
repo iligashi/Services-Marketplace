@@ -31,6 +31,8 @@ const io = new Server(server, {
 });
 
 initSocket(io);
+// Admin routes use this to disconnect a suspended user's sockets
+app.set('io', io);
 
 // Auto-release escrow payments every hour
 setInterval(autoReleasePayments, 60 * 60 * 1000);
