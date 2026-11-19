@@ -110,7 +110,7 @@ exports.getById = async (req, res, next) => {
   try {
     const [rows] = await db.query(
       `SELECT j.*, c.name as category_name, c.slug as category_slug,
-              u.name as customer_name, u.avatar_url as customer_avatar, u.phone as customer_phone,
+              u.name as customer_name, u.avatar_url as customer_avatar,
               ab.provider_id, pu.name as provider_name, pu.avatar_url as provider_avatar
        FROM jobs j
        LEFT JOIN categories c ON j.category_id = c.id

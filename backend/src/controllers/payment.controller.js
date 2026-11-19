@@ -6,24 +6,46 @@ const { getFeeRate } = require('../services/reputation.service');
 const { releaseEscrowForJob } = require('../services/escrow.service');
 const { createNotification } = require('../services/notification.service');
 
+// Idempotent: repeating the request (double tap, network retry) returns the
+// same PaymentIntent instead of creating a second charge. One payment row per
+// job is enforced by a unique key on payments.job_id.
 exports.createPaymentIntent = async (req, res, next) => {
   try {
-    const { job_id } = req.body;
+    const jobId = Number(req.body.job_id);
+    if (!Number.isInteger(jobId) || jobId <= 0) {
+      throw new AppError('job_id is required', 400);
+    }
+    if (!stripe) {
+      throw new AppError('Payment service not configured', 503);
+    }
 
-    // Get job with accepted bid
     const [jobs] = await db.query(
       `SELECT j.*, b.id as bid_id, b.amount as bid_amount, b.provider_id
        FROM jobs j
        JOIN bids b ON j.id = b.job_id AND b.status = 'accepted'
-       WHERE j.id = ? AND j.customer_id = ? AND j.status = 'assigned'`,
-      [job_id, req.user.id]
+       WHERE j.id = ? AND j.customer_id = ? AND j.status IN ('assigned', 'in_progress')`,
+      [jobId, req.user.id]
     );
-
     if (jobs.length === 0) {
       throw new AppError('No assigned job with accepted bid found', 404);
     }
-
     const job = jobs[0];
+
+    const [existingRows] = await db.query('SELECT * FROM payments WHERE job_id = ?', [job.id]);
+    const existing = existingRows[0];
+
+    if (existing && existing.status !== 'failed') {
+      if (existing.status !== 'pending') {
+        throw new AppError('This job has already been paid', 409);
+      }
+      // Replay: hand back the PaymentIntent that already exists
+      const intent = await stripe.paymentIntents.retrieve(existing.stripe_payment_intent_id);
+      return res.json(paymentResponse(intent.client_secret, existing));
+    }
+
+    if (job.status !== 'assigned') {
+      throw new AppError('Job is not awaiting payment', 409);
+    }
 
     const [providerProfiles] = await db.query(
       'SELECT avg_rating, total_jobs_done, id_verified FROM provider_profiles WHERE user_id = ?',
@@ -31,50 +53,86 @@ exports.createPaymentIntent = async (req, res, next) => {
     );
     const feeRate = getFeeRate(providerProfiles[0]);
 
-    const amount = Math.round(job.bid_amount * 100); // cents
+    const amount = Math.round(Number(job.bid_amount) * 100); // cents
     const platformFee = Math.round(amount * (feeRate / 100));
     const providerPayout = amount - platformFee;
 
-    if (!stripe) {
-      throw new AppError('Payment service not configured', 503);
-    }
-
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency: 'usd',
-      metadata: {
-        job_id: job.id.toString(),
-        provider_id: job.provider_id.toString(),
-        customer_id: req.user.id.toString(),
+    // Same key for every retry of this attempt; a new key only after a failed attempt
+    const idempotencyKey = `job-${job.id}-payment-${existing ? existing.stripe_payment_intent_id : 'initial'}`;
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount,
+        currency: 'usd',
+        metadata: {
+          job_id: job.id.toString(),
+          provider_id: job.provider_id.toString(),
+          customer_id: req.user.id.toString(),
+        },
+        capture_method: 'manual', // Hold funds, don't capture yet
       },
-      capture_method: 'manual', // Hold funds, don't capture yet
-    });
-
-    // Record payment
-    await db.query(
-      `INSERT INTO payments (job_id, customer_id, provider_id, amount, platform_fee, provider_payout, stripe_payment_intent_id, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'held')`,
-      [job.id, req.user.id, job.provider_id, job.bid_amount, platformFee / 100, providerPayout / 100, paymentIntent.id]
+      { idempotencyKey }
     );
 
-    // Update job status
-    await db.query('UPDATE jobs SET status = ? WHERE id = ?', ['in_progress', job.id]);
+    const conn = await db.getConnection();
+    let payment;
+    try {
+      await conn.beginTransaction();
+      if (existing) {
+        await conn.query(
+          `UPDATE payments SET amount = ?, platform_fee = ?, provider_payout = ?, stripe_payment_intent_id = ?, status = 'pending'
+           WHERE id = ? AND status = 'failed'`,
+          [job.bid_amount, platformFee / 100, providerPayout / 100, paymentIntent.id, existing.id]
+        );
+      } else {
+        // A concurrent request may have inserted the row already: the unique
+        // key turns that into a no-op instead of a duplicate payment
+        await conn.query(
+          `INSERT INTO payments (job_id, customer_id, provider_id, amount, platform_fee, provider_payout, stripe_payment_intent_id, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+           ON DUPLICATE KEY UPDATE id = id`,
+          [job.id, req.user.id, job.provider_id, job.bid_amount, platformFee / 100, providerPayout / 100, paymentIntent.id]
+        );
+      }
+      await conn.query("UPDATE jobs SET status = 'in_progress' WHERE id = ? AND status = 'assigned'", [job.id]);
+      const [rows] = await conn.query('SELECT * FROM payments WHERE job_id = ?', [job.id]);
+      payment = rows[0];
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
 
-    res.json({
-      clientSecret: paymentIntent.client_secret,
-      amount: job.bid_amount,
-      platform_fee: platformFee / 100,
-      platform_fee_rate: feeRate,
-      provider_payout: providerPayout / 100,
-    });
+    if (payment.stripe_payment_intent_id !== paymentIntent.id) {
+      // Lost a race with a parallel request: return the winner's intent
+      const winner = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+      return res.json(paymentResponse(winner.client_secret, payment, feeRate));
+    }
+    res.json(paymentResponse(paymentIntent.client_secret, payment, feeRate));
   } catch (err) {
     next(err);
   }
 };
 
+function paymentResponse(clientSecret, payment, feeRate) {
+  const amount = Number(payment.amount);
+  const fee = Number(payment.platform_fee);
+  return {
+    clientSecret,
+    amount,
+    platform_fee: fee,
+    platform_fee_rate: feeRate ?? (amount > 0 ? Math.round((fee / amount) * 10000) / 100 : 0),
+    provider_payout: Number(payment.provider_payout),
+  };
+}
+
 exports.confirmCompletion = async (req, res, next) => {
   try {
-    const { job_id } = req.body;
+    const job_id = Number(req.body.job_id);
+    if (!Number.isInteger(job_id) || job_id <= 0) {
+      throw new AppError('job_id is required', 400);
+    }
 
     // Get job and verify ownership
     const [jobs] = await db.query(
@@ -146,16 +204,30 @@ exports.stripeWebhook = async (req, res, next) => {
       return res.status(400).json({ error: 'Webhook signature verification failed' });
     }
 
+    // Every update is conditional on the current state, so Stripe's retried
+    // or out-of-order deliveries cannot move a payment backwards.
+    const pi = event.data.object;
     switch (event.type) {
-      case 'payment_intent.succeeded':
-        // Payment confirmed
+      case 'payment_intent.amount_capturable_updated':
+        // Funds are authorised and held on the customer's card
+        await db.query(
+          "UPDATE payments SET status = 'held', held_at = NOW() WHERE stripe_payment_intent_id = ? AND status = 'pending'",
+          [pi.id]
+        );
         break;
       case 'payment_intent.payment_failed':
-        const pi = event.data.object;
         await db.query(
-          'UPDATE payments SET status = ? WHERE stripe_payment_intent_id = ?',
-          ['refunded', pi.id]
+          "UPDATE payments SET status = 'failed' WHERE stripe_payment_intent_id = ? AND status = 'pending'",
+          [pi.id]
         );
+        break;
+      case 'payment_intent.canceled':
+        await db.query(
+          "UPDATE payments SET status = 'refunded' WHERE stripe_payment_intent_id = ? AND status IN ('pending', 'held')",
+          [pi.id]
+        );
+        break;
+      default:
         break;
     }
 

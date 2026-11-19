@@ -9,10 +9,13 @@ export default function Payments() {
   }, []);
 
   const statusColor = {
+    pending: '#dfe6e9',
     held: '#ffeaa7',
+    releasing: '#81ecec',
     released: '#55efc4',
     refunded: '#fab1a0',
     disputed: '#ff7675',
+    failed: '#ff7675',
   };
 
   return (
