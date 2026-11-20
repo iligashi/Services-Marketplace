@@ -1,9 +1,10 @@
 import axios from 'axios';
 
-// VITE_API_URL is a full base URL; VITE_API_HOST is a bare host injected by
-// the hosting platform (Render), served over https.
+// VITE_API_URL is a full base URL. VITE_API_HOST is injected by Render as the
+// bare service name (e.g. "marketplace-api-b0sd"), public at <name>.onrender.com.
 const { VITE_API_URL, VITE_API_HOST } = import.meta.env;
-const baseURL = VITE_API_URL || (VITE_API_HOST ? `https://${VITE_API_HOST}/api` : 'http://localhost:3000/api');
+const apiHost = VITE_API_HOST && !VITE_API_HOST.includes('.') ? `${VITE_API_HOST}.onrender.com` : VITE_API_HOST;
+const baseURL = VITE_API_URL || (apiHost ? `https://${apiHost}/api` : 'http://localhost:3000/api');
 
 const api = axios.create({
   baseURL,
