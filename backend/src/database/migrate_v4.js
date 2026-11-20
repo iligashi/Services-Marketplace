@@ -27,6 +27,7 @@ async function migrate() {
     port: config.db.port,
     user: config.db.user,
     password: config.db.password,
+    ssl: config.db.ssl,
     database: config.db.database,
   });
 

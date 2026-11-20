@@ -49,6 +49,37 @@ const origin = (value, fallback) => {
   return /^https?:\/\//.test(v) ? v : `https://${v}`;
 };
 
+// Database connection. DATABASE_URL (mysql://user:pass@host:port/db, as given
+// by managed providers such as Aiven) overrides the individual DB_* values.
+// TLS: DB_SSL=true (or ?ssl-mode=REQUIRED in the URL) turns it on, always with
+// certificate verification; DB_SSL_CA holds the provider's CA certificate (PEM,
+// literal newlines or \n) when it is not signed by a public CA.
+function databaseConfig() {
+  const db = {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT, 10) || 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'services_marketplace',
+  };
+  let sslRequired = /^(1|true|required)$/i.test(process.env.DB_SSL || '');
+  if (process.env.DATABASE_URL) {
+    const url = new URL(process.env.DATABASE_URL);
+    if (!/^mysql2?:$/.test(url.protocol)) throw new Error('DATABASE_URL must be a mysql:// URL');
+    db.host = url.hostname;
+    db.port = parseInt(url.port, 10) || 3306;
+    db.user = decodeURIComponent(url.username);
+    db.password = decodeURIComponent(url.password);
+    const name = decodeURIComponent(url.pathname.replace(/^\//, ''));
+    if (name && !process.env.DB_NAME) db.database = name;
+    const mode = url.searchParams.get('ssl-mode') || url.searchParams.get('sslmode') || '';
+    if (/^(required|verify_ca|verify_identity)$/i.test(mode)) sslRequired = true;
+  }
+  const ca = process.env.DB_SSL_CA ? process.env.DB_SSL_CA.replace(/\n/g, '\n') : undefined;
+  if (sslRequired || ca) db.ssl = { ca, rejectUnauthorized: true };
+  return db;
+}
+
 const jwtSecret = resolveSecret('JWT_SECRET');
 const jwtRefreshSecret = resolveSecret('JWT_REFRESH_SECRET');
 if (jwtSecret === jwtRefreshSecret) {
@@ -59,13 +90,7 @@ module.exports = {
   port: process.env.PORT || 3000,
   nodeEnv,
 
-  db: {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT, 10) || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'services_marketplace',
-  },
+  db: databaseConfig(),
 
   jwt: {
     secret: jwtSecret,
