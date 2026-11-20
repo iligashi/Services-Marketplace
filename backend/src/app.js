@@ -10,6 +10,8 @@ const { createRateLimitStore } = require('./config/rate-limit-store');
 
 const app = express();
 
+if (config.trustProxy) app.set('trust proxy', config.trustProxy);
+
 // Security
 app.use(helmet());
 app.use(cors({
@@ -20,32 +22,30 @@ app.use(cors({
 // Rate limiting — global baseline, with stricter limits on sensitive routes below
 // Counters live in Redis when REDIS_URL/REDIS_HOST is set, so limits hold
 // across restarts and multiple API instances.
-const globalLimiter = rateLimit({
-  store: createRateLimitStore('global'),
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: 'Too many requests, try again later' },
-});
+// Limits are configurable via RATE_LIMIT_* (see .env.example).
+const limits = config.rateLimit;
+// Stripe's webhook deliveries are authenticated by signature and retried by
+// Stripe; rate limiting them would only drop payment events.
+const isStripeWebhook = (req) => req.originalUrl.startsWith('/api/payments/webhook');
 
-const authLimiter = rateLimit({
-  store: createRateLimitStore('auth'),
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many auth attempts, please try again later' },
-});
+const limiter = (prefix, max, error, skip) =>
+  rateLimit({
+    store: createRateLimitStore(prefix),
+    windowMs: limits.windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error },
+    skip,
+  });
 
-const paymentLimiter = rateLimit({
-  store: createRateLimitStore('payments'),
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many payment requests, please try again later' },
-});
+const globalLimiter = limiter('global', limits.globalMax, 'Too many requests, try again later', isStripeWebhook);
+// Brute-force protection for credential endpoints only; profile, push-token
+// and logout are ordinary authenticated calls covered by the global limit.
+const authLimiter = limiter('auth', limits.authMax, 'Too many auth attempts, please try again later');
+const paymentLimiter = limiter('payments', limits.paymentsMax, 'Too many payment requests, please try again later', isStripeWebhook);
 
-app.use('/api/auth', authLimiter);
+app.use(['/api/auth/login', '/api/auth/register', '/api/auth/refresh-token'], authLimiter);
 app.use('/api/payments', paymentLimiter);
 app.use(globalLimiter);
 
