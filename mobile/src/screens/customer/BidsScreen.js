@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { Alert } from 'react-native';
 import { getBidsForJob, acceptBid, rejectBid } from '../../api/jobs.api';
 import BidCard from '../../components/BidCard';
-import { colors, typography } from '../../theme';
+import { Screen, EmptyState, Appear } from '../../components/ui';
 import { confirmAction } from '../../utils/dialogs';
+import { successFeedback } from '../../utils/haptics';
 
 export default function BidsScreen({ route, navigation }) {
   const { jobId } = route.params;
@@ -22,6 +23,7 @@ export default function BidsScreen({ route, navigation }) {
   const doAccept = async (bidId) => {
     try {
       await acceptBid(bidId);
+      successFeedback();
       Alert.alert('Bid Accepted!', 'The provider has been notified.');
       loadBids();
     } catch (err) {
@@ -40,48 +42,32 @@ export default function BidsScreen({ route, navigation }) {
     catch (err) { Alert.alert('Error', err.response?.data?.error || 'Failed'); }
   };
 
-  const pendingCount = bids.filter(b => b.status === 'pending').length;
+  const pendingCount = bids.filter((b) => b.status === 'pending').length;
+  const lowest = bids.length ? Math.min(...bids.map((b) => parseFloat(b.amount) || 0)) : 0;
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={bids}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
+    <Screen
+      title="Offers"
+      subtitle={bids.length
+        ? `${bids.length} ${bids.length === 1 ? 'offer' : 'offers'} · from $${lowest.toLocaleString()}${pendingCount ? ` · ${pendingCount} waiting for you` : ''}`
+        : undefined}
+      data={bids}
+      keyExtractor={(item) => item.id.toString()}
+      renderItem={({ item, index }) => (
+        <Appear index={index}>
           <BidCard
             bid={item}
             onAccept={() => handleAccept(item.id)}
             onReject={() => handleReject(item.id)}
             onViewProfile={() => navigation.navigate('ProviderProfile', { userId: item.provider_id, name: item.provider_name })}
           />
-        )}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={loadBids} tintColor={colors.primary} />}
-        ListHeaderComponent={bids.length > 0 ? (
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>{bids.length} {bids.length === 1 ? 'Bid' : 'Bids'}</Text>
-            {pendingCount > 0 && <Text style={styles.headerSub}>{pendingCount} awaiting your decision</Text>}
-          </View>
-        ) : null}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>{'💬'}</Text>
-            <Text style={styles.emptyTitle}>{loading ? 'Loading bids...' : 'No bids yet'}</Text>
-            <Text style={styles.emptySubtitle}>Providers will start bidding soon</Text>
-          </View>
-        }
-        contentContainerStyle={bids.length === 0 ? { flex: 1 } : { paddingBottom: 20 }}
-      />
-    </View>
+        </Appear>
+      )}
+      refreshing={loading && bids.length > 0}
+      onRefresh={loadBids}
+      ListEmptyComponent={!loading ? (
+        <EmptyState icon="chatbubbles" title="No offers yet" message="Local pros usually respond within a few hours. We'll notify you." />
+      ) : null}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
-  headerTitle: { ...typography.h2 },
-  headerSub: { ...typography.bodySmall, marginTop: 4, color: colors.primary },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { ...typography.h3, marginBottom: 8 },
-  emptySubtitle: { ...typography.bodySmall, textAlign: 'center' },
-});

@@ -1,30 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, ScrollView, Alert, Image, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSelector } from 'react-redux';
 import { getJobById } from '../../api/jobs.api';
 import { confirmCompletion } from '../../api/payments.api';
-import { colors, radius, shadows, typography, statusConfig } from '../../theme';
 import JobStatusTimeline from '../../components/JobStatusTimeline';
+import Avatar from '../../components/Avatar';
+import { Screen, Card, Button, IconTile, StatusPill, Section, Row, EmptyState, Stat, Appear } from '../../components/ui';
+import { useTheme } from '../../context/ThemeContext';
+import { type } from '../../theme';
 import { mediaUrl } from '../../config';
 import { confirmAction } from '../../utils/dialogs';
-
+import { categoryMeta, money } from '../../utils/categories';
+import { successFeedback } from '../../utils/haptics';
 
 export default function JobDetailScreen({ route, navigation }) {
   const { jobId } = route.params;
+  const { colors } = useTheme();
   const [job, setJob] = useState(null);
+  const [failed, setFailed] = useState(false);
   const { user } = useSelector((state) => state.auth);
 
   useEffect(() => { loadJob(); }, [jobId]);
 
   const loadJob = async () => {
-    try { const { data } = await getJobById(jobId); setJob(data.job); }
-    catch { Alert.alert('Error', 'Failed to load job'); }
+    setFailed(false);
+    try {
+      const { data } = await getJobById(jobId);
+      setJob(data.job);
+    } catch {
+      setFailed(true);
+    }
   };
 
   const doConfirmCompletion = async () => {
-    try { await confirmCompletion(jobId); Alert.alert('Done!', 'Payment released successfully'); loadJob(); }
-    catch (err) { Alert.alert('Error', err.response?.data?.error || 'Failed'); }
+    try {
+      await confirmCompletion(jobId);
+      successFeedback();
+      Alert.alert('Done!', 'Payment released successfully');
+      loadJob();
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed');
+    }
   };
 
   const handleConfirmCompletion = async () => {
@@ -33,205 +49,111 @@ export default function JobDetailScreen({ route, navigation }) {
     }
   };
 
-  if (!job) return (
-    <View style={styles.loadingContainer}>
-      <Text style={styles.loadingText}>{'Loading job details...'}</Text>
-    </View>
-  );
+  if (!job) {
+    return (
+      <Screen title="Job" large={false}>
+        {failed ? (
+          <EmptyState icon="cloud-offline" tone="textSecondary" title="Couldn't load this job" message="Check your connection and try again." actionLabel="Try again" onAction={loadJob} style={{ marginTop: 80 }} />
+        ) : (
+          <View style={{ paddingTop: 120, alignItems: 'center' }}><ActivityIndicator color={colors.textSecondary} /></View>
+        )}
+      </Screen>
+    );
+  }
 
-  const status = statusConfig[job.status] || statusConfig.open;
   const photos = typeof job.photos === 'string' ? JSON.parse(job.photos) : job.photos || [];
   const isOwner = user?.id === job.customer_id;
+  const isActive = ['assigned', 'in_progress'].includes(job.status);
+  const cat = categoryMeta(job.category_slug || job.category_name);
+
+  let footer = null;
+  if (isOwner && job.status === 'open') {
+    footer = <Button title={`View Bids (${job.bid_count})`} icon="people" onPress={() => navigation.navigate('Bids', { jobId: job.id })} />;
+  } else if (isOwner && isActive) {
+    footer = (
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Button title="Message" icon="chatbubble" variant="tinted" onPress={() => navigation.navigate('Chat', { jobId: job.id })} flex />
+        <Button title="Confirm & Pay" icon="checkmark-circle" tone="success" onPress={handleConfirmCompletion} style={{ flex: 1.4 }} />
+      </View>
+    );
+  } else if (isOwner && job.status === 'completed' && job.provider_id) {
+    footer = (
+      <Button
+        title="Leave a Review"
+        icon="star"
+        tone="gold"
+        onPress={() => navigation.navigate('Review', { jobId: job.id, revieweeId: job.provider_id, revieweeName: job.provider_name || 'Provider' })}
+      />
+    );
+  }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      <View style={[styles.statusBanner, { backgroundColor: status.bg }]}>
-        <Ionicons name={status.icon} size={14} color={status.color} />
-        <Text style={[styles.statusLabel, { color: status.color }]}>{status.label}</Text>
-      </View>
-
-      <View style={styles.titleSection}>
-        {job.category_name ? (
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>{job.category_name}</Text>
-          </View>
-        ) : null}
-        <Text style={styles.title}>{job.title}</Text>
-        <Text style={styles.postedBy}>
-          {`Posted by ${job.customer_name} \u00B7 ${new Date(job.created_at).toLocaleDateString()}`}
+    <Screen title={job.title} large={false} titleOnScroll footer={footer}>
+      {/* Title block */}
+      <Appear style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <IconTile icon={cat.icon} tone={cat.tone} size={34} />
+          <Text style={[type.subhead, { color: colors.textSecondary, flex: 1 }]}>{job.category_name || 'General'}</Text>
+          <StatusPill status={job.status} />
+        </View>
+        <Text style={[type.title1, { color: colors.text }]}>{job.title}</Text>
+        <Text style={[type.footnote, { color: colors.textSecondary, marginTop: 6 }]}>
+          {`Posted by ${job.customer_name} · ${new Date(job.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}
         </Text>
-      </View>
+      </Appear>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{'Progress'}</Text>
-        <View style={styles.timelineCard}>
+      {/* Key numbers */}
+      <Appear index={1}>
+        <Card style={{ marginHorizontal: 16, marginTop: 20, flexDirection: 'row', paddingVertical: 4 }}>
+          <Stat value={job.budget ? money(job.budget) : '—'} label="Budget" />
+          <View style={{ width: StyleSheet.hairlineWidth, backgroundColor: colors.separator, marginVertical: 14 }} />
+          <Stat value={String(job.bid_count ?? 0)} label="Bids" tone="primary" />
+          <View style={{ width: StyleSheet.hairlineWidth, backgroundColor: colors.separator, marginVertical: 14 }} />
+          <Stat value={job.deadline ? new Date(job.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Flexible'} label="Deadline" />
+        </Card>
+      </Appear>
+
+      {/* Progress */}
+      <Appear index={2}>
+        <Text style={[type.footnote, { color: colors.textSecondary, textTransform: 'uppercase', marginLeft: 32, marginTop: 24, marginBottom: 7 }]}>Progress</Text>
+        <Card style={{ marginHorizontal: 16 }}>
           <JobStatusTimeline job={job} />
-        </View>
-      </View>
+        </Card>
+      </Appear>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.detailCards}>
-        {job.budget ? (
-          <View style={styles.detailCard}>
-            <Text style={styles.detailCardLabel}>{'Budget'}</Text>
-            <Text style={[styles.detailCardValue, { color: colors.accent }]}>{`$${parseFloat(job.budget).toLocaleString()}`}</Text>
-          </View>
-        ) : null}
-        {job.bid_count !== undefined ? (
-          <View style={styles.detailCard}>
-            <Text style={styles.detailCardLabel}>{'Bids'}</Text>
-            <Text style={[styles.detailCardValue, { color: colors.primary }]}>{String(job.bid_count)}</Text>
-          </View>
-        ) : null}
-        {job.deadline ? (
-          <View style={styles.detailCard}>
-            <Text style={styles.detailCardLabel}>{'Deadline'}</Text>
-            <Text style={styles.detailCardValue}>{new Date(job.deadline).toLocaleDateString()}</Text>
-          </View>
-        ) : null}
-      </ScrollView>
+      {/* Description */}
+      <Text style={[type.footnote, { color: colors.textSecondary, textTransform: 'uppercase', marginLeft: 32, marginTop: 24, marginBottom: 7 }]}>Details</Text>
+      <Card style={{ marginHorizontal: 16 }}>
+        <Text style={[type.body, { color: colors.text }]}>{job.description}</Text>
+      </Card>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{'Description'}</Text>
-        <Text style={styles.description}>{job.description}</Text>
-      </View>
-
-      {job.location_address ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{'Location'}</Text>
-          <View style={styles.locationCard}>
-            <Text style={styles.locationPin}>{'\u25CB'}</Text>
-            <Text style={styles.locationText}>{job.location_address}</Text>
-          </View>
-        </View>
-      ) : null}
-
-      {job.provider_name ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{'Assigned Provider'}</Text>
-          <TouchableOpacity
-            style={styles.providerCard}
-            onPress={() => navigation.navigate('ProviderProfile', { userId: job.provider_id, name: job.provider_name })}
-            activeOpacity={0.7}
-          >
-            <View style={styles.providerAvatar}>
-              <Text style={styles.providerInitial}>{job.provider_name.charAt(0).toUpperCase()}</Text>
-            </View>
-            <Text style={styles.providerName}>{job.provider_name}</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-          </TouchableOpacity>
-        </View>
+      {job.location_address || job.provider_name ? (
+        <Section separatorInset={58}>
+          {job.location_address ? <Row icon="location" iconTone="error" title={job.location_address} subtitle="Location" /> : null}
+          {job.provider_name ? (
+            <Row
+              icon="person"
+              iconTone="indigo"
+              title={job.provider_name}
+              subtitle="Your pro"
+              chevron
+              right={<Avatar name={job.provider_name} size={30} />}
+              onPress={() => navigation.navigate('ProviderProfile', { userId: job.provider_id, name: job.provider_name })}
+            />
+          ) : null}
+        </Section>
       ) : null}
 
       {photos.length > 0 ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{'Photos'}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <>
+          <Text style={[type.footnote, { color: colors.textSecondary, textTransform: 'uppercase', marginLeft: 32, marginTop: 24, marginBottom: 7 }]}>Photos</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
             {photos.map((uri, i) => (
-              <Image key={i} source={{ uri: mediaUrl(uri) }} style={styles.photo} />
+              <Image key={i} source={{ uri: mediaUrl(uri) }} style={{ width: 200, height: 150, borderRadius: 18 }} />
             ))}
           </ScrollView>
-        </View>
+        </>
       ) : null}
-
-      <View style={styles.actions}>
-        {isOwner && job.status === 'open' ? (
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('Bids', { jobId: job.id })} activeOpacity={0.8}>
-            <Text style={styles.primaryBtnText}>{`View Bids (${job.bid_count})`}</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {isOwner && ['assigned', 'in_progress'].includes(job.status) ? (
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('Chat', { jobId: job.id })} activeOpacity={0.8}>
-            <Text style={styles.secondaryBtnText}>{'Message Provider'}</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {isOwner && ['assigned', 'in_progress'].includes(job.status) ? (
-          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={handleConfirmCompletion} activeOpacity={0.8}>
-            <Text style={styles.primaryBtnText}>{'Confirm Complete & Pay'}</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {isOwner && job.status === 'completed' && job.provider_id ? (
-          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.gold }]}
-            onPress={() => navigation.navigate('Review', { jobId: job.id, revieweeId: job.provider_id, revieweeName: job.provider_name || 'Provider' })}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.primaryBtnText, { color: colors.text }]}>{'Leave a Review'}</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    </ScrollView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
-  loadingText: { ...typography.bodySmall },
-
-  statusBanner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 10, gap: 6,
-  },
-  statusIcon: { fontSize: 12, fontWeight: '700' },
-  statusLabel: { fontWeight: '700', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  titleSection: { padding: 20 },
-  categoryBadge: { backgroundColor: colors.primaryBg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: radius.full, alignSelf: 'flex-start', marginBottom: 10 },
-  categoryText: { ...typography.caption, color: colors.primary, fontSize: 11 },
-  title: { ...typography.h1, fontSize: 24, marginBottom: 8 },
-  postedBy: { ...typography.bodySmall, fontSize: 13 },
-
-  detailCards: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
-  detailCard: {
-    backgroundColor: colors.white, paddingVertical: 16, paddingHorizontal: 20,
-    borderRadius: radius.lg, minWidth: 110, alignItems: 'center',
-    borderWidth: 1, borderColor: colors.border, ...shadows.sm,
-  },
-  detailCardLabel: { ...typography.caption, marginBottom: 6 },
-  detailCardValue: { fontSize: 22, fontWeight: '800', color: colors.text },
-
-  section: { paddingHorizontal: 20, paddingTop: 24 },
-  sectionTitle: { ...typography.caption, marginBottom: 10 },
-  description: { ...typography.body, lineHeight: 24, color: colors.text },
-
-  timelineCard: {
-    backgroundColor: colors.white, padding: 18, borderRadius: radius.lg,
-    borderWidth: 1, borderColor: colors.border, ...shadows.sm,
-  },
-
-  locationCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: colors.white, padding: 16, borderRadius: radius.lg,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  locationPin: { fontSize: 18, color: colors.primary },
-  locationText: { ...typography.body, flex: 1 },
-
-  providerCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: colors.white, padding: 16, borderRadius: radius.lg,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  providerAvatar: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center',
-  },
-  providerInitial: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  providerName: { ...typography.h3, flex: 1 },
-
-  photo: { width: 180, height: 140, borderRadius: radius.lg, marginRight: 10 },
-
-  actions: { padding: 20, gap: 12 },
-  primaryBtn: {
-    backgroundColor: colors.primary, paddingVertical: 18,
-    borderRadius: radius.lg, alignItems: 'center', ...shadows.md,
-  },
-  primaryBtnText: { ...typography.button, color: '#fff' },
-  secondaryBtn: {
-    paddingVertical: 18, borderRadius: radius.lg, alignItems: 'center',
-    borderWidth: 1.5, borderColor: colors.primary,
-  },
-  secondaryBtnText: { ...typography.button, color: colors.primary },
-});

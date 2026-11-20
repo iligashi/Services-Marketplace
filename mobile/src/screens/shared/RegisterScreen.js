@@ -1,66 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, ScrollView, StatusBar,
-} from 'react-native';
+import { View, Text, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { registerUser, clearError } from '../../store/authSlice';
-import { colors, radius, shadows, typography } from '../../theme';
+import { Screen, Field, Button, IconTile, Tappable, alpha } from '../../components/ui';
+import { useTheme } from '../../context/ThemeContext';
+import { type, shadows } from '../../theme';
 
 const ROLES = [
-  {
-    key: 'customer',
-    icon: 'home-outline',
-    title: 'I Need Services',
-    desc: 'Post jobs & hire professionals',
-  },
-  {
-    key: 'provider',
-    icon: 'construct-outline',
-    title: 'I Offer Services',
-    desc: 'Find jobs & earn money',
-  },
+  { key: 'customer', icon: 'home', tone: 'primary', title: 'I need help', desc: 'Post jobs and hire local pros' },
+  { key: 'provider', icon: 'construct', tone: 'accent', title: 'I offer services', desc: 'Find jobs and get paid securely' },
 ];
 
-function Field({ label, icon, placeholder, value, onChangeText, field, focused, onFocus, onBlur, secure, keyboardType, autoCapitalize, autoComplete }) {
-  const [showPass, setShowPass] = useState(false);
-  const isFocused = focused === field;
-  return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={[styles.inputRow, isFocused && styles.inputRowFocused]}>
-        <Ionicons name={icon} size={18} color={isFocused ? colors.primary : colors.textTertiary} style={styles.inputIcon} />
-        <TextInput
-          style={styles.input}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textTertiary}
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={secure && !showPass}
-          keyboardType={keyboardType}
-          autoCapitalize={autoCapitalize || 'sentences'}
-          autoComplete={autoComplete}
-          onFocus={onFocus}
-          onBlur={onBlur}
-        />
-        {secure && (
-          <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
-            <Ionicons name={showPass ? 'eye-outline' : 'eye-off-outline'} size={18} color={colors.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-}
-
 export default function RegisterScreen({ navigation }) {
+  const { colors, isDark } = useTheme();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('customer');
-  const [focused, setFocused] = useState(null);
   const dispatch = useDispatch();
   const { loading, error } = useSelector((state) => state.auth);
 
@@ -80,141 +38,53 @@ export default function RegisterScreen({ navigation }) {
     if (error) { Alert.alert('Registration Failed', error); dispatch(clearError()); }
   }, [error]);
 
-  const fo = (field) => ({ onFocus: () => setFocused(field), onBlur: () => setFocused(null) });
-
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
-
-      {/* Back button */}
-      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-        <View style={styles.backCircle}>
-          <Ionicons name="arrow-back" size={20} color={colors.text} />
-        </View>
-      </TouchableOpacity>
-
-      <Text style={styles.pageTitle}>Create Account</Text>
-      <Text style={styles.pageSub}>Join thousands of happy users</Text>
-
-      {/* Role selector */}
-      <View style={styles.roleRow}>
+    <Screen title="Create account" subtitle="It takes less than a minute.">
+      <View style={{ flexDirection: 'row', gap: 12, marginHorizontal: 16 }}>
         {ROLES.map((r) => {
           const active = role === r.key;
+          const tint = colors[r.tone];
           return (
-            <TouchableOpacity
+            <Tappable
               key={r.key}
-              style={[styles.roleCard, active && styles.roleCardActive]}
               onPress={() => setRole(r.key)}
-              activeOpacity={0.8}
+              scaleTo={0.96}
+              accessibilityState={{ selected: active }}
+              style={[{
+                flex: 1, padding: 16, borderRadius: 22, backgroundColor: active ? alpha(tint, 0.1) : colors.card,
+                borderWidth: 2, borderColor: active ? tint : 'transparent',
+              }, !isDark && !active ? shadows.sm : null]}
             >
-              <View style={[styles.roleIconWrap, active && styles.roleIconWrapActive]}>
-                <Ionicons name={r.icon} size={22} color={active ? colors.primary : colors.textSecondary} />
+              <IconTile icon={r.icon} tone={r.tone} size={40} />
+              <Text style={[type.headline, { color: colors.text, marginTop: 12 }]}>{r.title}</Text>
+              <Text style={[type.footnote, { color: colors.textSecondary, marginTop: 2 }]}>{r.desc}</Text>
+              <View style={{ position: 'absolute', top: 14, right: 14 }}>
+                <Ionicons name={active ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={active ? tint : colors.textTertiary} />
               </View>
-              <Text style={[styles.roleTitle, active && styles.roleTitleActive]}>{r.title}</Text>
-              <Text style={styles.roleDesc}>{r.desc}</Text>
-              {active && (
-                <View style={styles.roleCheck}>
-                  <Ionicons name="checkmark" size={12} color={colors.white} />
-                </View>
-              )}
-            </TouchableOpacity>
+            </Tappable>
           );
         })}
       </View>
 
-      {/* Fields */}
-      <Field label="Full Name" icon="person-outline" placeholder="John Smith" value={name} onChangeText={setName} field="name" focused={focused} {...fo('name')} autoComplete="name" />
-      <Field label="Email Address" icon="mail-outline" placeholder="you@example.com" value={email} onChangeText={setEmail} field="email" focused={focused} {...fo('email')} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
-      <Field label="Password" icon="lock-closed-outline" placeholder="Min. 6 characters" value={password} onChangeText={setPassword} field="password" focused={focused} {...fo('password')} secure autoComplete="new-password" />
-      <Field label="Phone (optional)" icon="call-outline" placeholder="+1 555 000 0000" value={phone} onChangeText={setPhone} field="phone" focused={focused} {...fo('phone')} keyboardType="phone-pad" autoCapitalize="none" />
-
-      <TouchableOpacity
-        style={[styles.btn, loading && styles.btnDisabled]}
-        onPress={handleRegister}
-        disabled={loading}
-        activeOpacity={0.85}
-      >
-        {loading ? (
-          <ActivityIndicator color={colors.white} size="small" />
-        ) : (
-          <>
-            <Ionicons name="person-add-outline" size={18} color={colors.white} style={{ marginRight: 8 }} />
-            <Text style={styles.btnText}>
-              Create {role === 'customer' ? 'Customer' : 'Provider'} Account
-            </Text>
-          </>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Already have an account?</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
-          <Text style={styles.footerLink}> Sign In</Text>
-        </TouchableOpacity>
+      <View style={{ marginHorizontal: 16, marginTop: 24, gap: 14 }}>
+        <Field label="Full name" icon="person" placeholder="Jane Smith" value={name} onChangeText={setName} autoComplete="name" />
+        <Field label="Email" icon="mail" placeholder="you@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+        <Field label="Password" icon="lock-closed" placeholder="At least 6 characters" value={password} onChangeText={setPassword} secure autoComplete="new-password" />
+        <Field label="Phone (optional)" icon="call" placeholder="+383 44 000 000" value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoCapitalize="none" />
       </View>
-    </ScrollView>
+
+      <View style={{ marginHorizontal: 16, marginTop: 24 }}>
+        <Button
+          title={`Create ${role === 'customer' ? 'Customer' : 'Provider'} Account`}
+          gradient
+          loading={loading}
+          onPress={handleRegister}
+        />
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 18 }}>
+          <Text style={[type.subhead, { color: colors.textSecondary }]}>Already have an account? </Text>
+          <Text onPress={() => navigation.goBack()} style={[type.subhead, { color: colors.primary, fontWeight: '600' }]}>Sign in</Text>
+        </View>
+      </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
-  content: { padding: 24, paddingTop: 56, paddingBottom: 48 },
-
-  backBtn: { marginBottom: 24 },
-  backCircle: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center',
-    ...shadows.sm,
-  },
-
-  pageTitle: { ...typography.h1, marginBottom: 4 },
-  pageSub: { ...typography.bodySmall, marginBottom: 28 },
-
-  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 28 },
-  roleCard: {
-    flex: 1, padding: 16, borderRadius: radius.xl,
-    backgroundColor: colors.bg, borderWidth: 2, borderColor: colors.border,
-    alignItems: 'center', position: 'relative',
-  },
-  roleCardActive: { borderColor: colors.primary, backgroundColor: colors.primaryBg },
-  roleIconWrap: {
-    width: 48, height: 48, borderRadius: 14,
-    backgroundColor: colors.bgAlt, justifyContent: 'center', alignItems: 'center',
-    marginBottom: 10,
-  },
-  roleIconWrapActive: { backgroundColor: 'rgba(37,99,235,0.12)' },
-  roleTitle: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center', marginBottom: 4 },
-  roleTitleActive: { color: colors.primary },
-  roleDesc: { fontSize: 11, color: colors.textTertiary, textAlign: 'center', lineHeight: 15 },
-  roleCheck: {
-    position: 'absolute', top: 10, right: 10,
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center',
-  },
-
-  fieldWrap: { marginBottom: 16 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 8 },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1.5, borderColor: colors.border,
-    borderRadius: radius.lg, backgroundColor: colors.bg,
-    paddingHorizontal: 14,
-  },
-  inputRowFocused: { borderColor: colors.primary, backgroundColor: colors.primaryBg },
-  inputIcon: { marginRight: 10 },
-  input: { flex: 1, paddingVertical: 14, fontSize: 15, color: colors.text },
-  eyeBtn: { padding: 4 },
-
-  btn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.primary, paddingVertical: 16,
-    borderRadius: radius.lg, marginTop: 8,
-    ...shadows.md,
-  },
-  btnDisabled: { opacity: 0.65 },
-  btnText: { color: colors.white, fontSize: 16, fontWeight: '700' },
-
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 28 },
-  footerText: { ...typography.bodySmall },
-  footerLink: { color: colors.primary, fontWeight: '700', fontSize: 13 },
-});

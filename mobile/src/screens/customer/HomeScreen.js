@@ -1,26 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View, Text, FlatList, TouchableOpacity,
-  TextInput, RefreshControl, StatusBar,
-} from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchJobs, fetchCategories } from '../../store/jobSlice';
 import JobCard from '../../components/JobCard';
-import { radius, shadows } from '../../theme';
-import { useTheme } from '../../context/ThemeContext';
+import Avatar from '../../components/Avatar';
 import NotificationBell from '../../components/NotificationBell';
-
-const CATEGORY_ICONS = {
-  cleaning: 'sparkles-outline',
-  plumbing: 'water-outline',
-  electrical: 'flash-outline',
-  gardening: 'leaf-outline',
-  moving: 'cube-outline',
-  painting: 'brush-outline',
-  carpentry: 'hammer-outline',
-  default: 'build-outline',
-};
+import { JobListSkeleton } from '../../components/Skeleton';
+import { Screen, Button, IconTile, SectionHeader, EmptyState, Appear, Tappable, alpha } from '../../components/ui';
+import { useTheme } from '../../context/ThemeContext';
+import { type, shadows } from '../../theme';
+import { categoryMeta, greeting, todayLabel } from '../../utils/categories';
+import { tapFeedback } from '../../utils/haptics';
 
 export default function HomeScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -45,131 +37,116 @@ export default function HomeScreen({ navigation }) {
   };
 
   const handleCategoryFilter = (slug) => {
+    tapFeedback();
     const cat = selectedCategory === slug ? null : slug;
     setSelectedCategory(cat);
     dispatch(fetchJobs({ status: 'open', category: cat || undefined, search: search || undefined }));
   };
 
-  const getGreeting = () => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
+  const firstName = user?.name?.split(' ')[0] || 'there';
 
-  const Header = () => (
-    <View style={{ backgroundColor: colors.bg }}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.gradientStart} />
-
-      {/* Top bar */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20, backgroundColor: colors.gradientStart }}>
-        <View>
-          <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '500' }}>{getGreeting()},</Text>
-          <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff', marginTop: 2 }}>{user?.name?.split(' ')[0] || 'there'} 👋</Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <NotificationBell light />
-          <TouchableOpacity
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>{user?.name?.charAt(0)?.toUpperCase() || '?'}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
+  const header = (
+    <View>
       {/* Search */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 16, backgroundColor: colors.gradientStart }}>
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, paddingHorizontal: 14, ...shadows.sm }}>
-          <Ionicons name="search-outline" size={20} color={colors.textTertiary} style={{ marginRight: 10 }} />
-          <TextInput
-            style={{ flex: 1, paddingVertical: 12, fontSize: 15, color: colors.text }}
-            placeholder="Search services, jobs..."
-            placeholderTextColor={colors.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-            onSubmitEditing={() => loadJobs()}
-            returnKeyType="search"
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => { setSearch(''); loadJobs({ search: undefined }); }}>
-              <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
-        <TouchableOpacity
-          style={{ width: 46, height: 46, borderRadius: radius.lg, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' }}
-          onPress={() => loadJobs()}
-        >
-          <Ionicons name="options-outline" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Categories */}
-      {categories.length > 0 && (
-        <FlatList
-          horizontal
-          data={[{ id: 0, name: 'All', slug: null }, ...categories]}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => {
-            const active = item.slug === null ? !selectedCategory : selectedCategory === item.slug;
-            const iconName = CATEGORY_ICONS[item.slug] || CATEGORY_ICONS.default;
-            return (
-              <TouchableOpacity
-                style={[
-                  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, marginRight: 8 },
-                  active && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-                onPress={() => handleCategoryFilter(item.slug)}
-                activeOpacity={0.75}
-              >
-                <Ionicons name={iconName} size={14} color={active ? '#fff' : colors.textSecondary} style={{ marginRight: 5 }} />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: active ? '#fff' : colors.textSecondary }}>{item.name}</Text>
-              </TouchableOpacity>
-            );
-          }}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 14 }}
+      <View style={{ marginHorizontal: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.fill, borderRadius: 12, paddingHorizontal: 10, height: 40 }}>
+        <Ionicons name="search" size={18} color={colors.textSecondary} />
+        <TextInput
+          style={[type.body, { flex: 1, marginLeft: 6, color: colors.text, outlineStyle: 'none' }]}
+          placeholder="Search services and jobs"
+          placeholderTextColor={colors.textSecondary}
+          value={search}
+          onChangeText={setSearch}
+          onSubmitEditing={() => loadJobs()}
+          returnKeyType="search"
         />
-      )}
-
-      {/* Section header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8 }}>
-        <Text style={{ fontSize: 17, fontWeight: '700', color: colors.text }}>Available Jobs</Text>
-        {pagination ? (
-          <View style={{ backgroundColor: colors.primaryBg, paddingHorizontal: 10, paddingVertical: 3, borderRadius: radius.full, borderWidth: 1, borderColor: colors.primaryBorder }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>{pagination.total}</Text>
-          </View>
+        {search.length > 0 ? (
+          <Pressable onPress={() => { setSearch(''); loadJobs({ search: undefined }); }} hitSlop={8} accessibilityLabel="Clear search">
+            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+          </Pressable>
         ) : null}
       </View>
+
+      {/* Hero */}
+      <Appear>
+        <LinearGradient
+          colors={colors.gradientHero}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[{ marginHorizontal: 16, marginTop: 18, borderRadius: 26, padding: 20, overflow: 'hidden' }, shadows.glow(colors.indigo)]}
+        >
+          <View style={{ position: 'absolute', right: -30, top: -30, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+          <View style={{ position: 'absolute', right: 40, bottom: -50, width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <Ionicons name="sparkles" size={14} color="rgba(255,255,255,0.9)" />
+            <Text style={[type.caption2, { color: 'rgba(255,255,255,0.9)', letterSpacing: 0.6 }]}>PAY ONLY WHEN IT'S DONE</Text>
+          </View>
+          <Text style={[type.title2, { color: '#fff', marginBottom: 6 }]}>Need a hand at home?</Text>
+          <Text style={[type.subhead, { color: 'rgba(255,255,255,0.85)', marginBottom: 16, maxWidth: 260 }]}>
+            Describe the job, compare offers from local pros and keep your money safe in escrow.
+          </Text>
+          <Button title="Post a job" icon="add-circle" variant="white" size="md" onPress={() => navigation.navigate('PostJob')} style={{ alignSelf: 'flex-start' }} />
+        </LinearGradient>
+      </Appear>
+
+      {/* Categories */}
+      {categories.length > 0 ? (
+        <>
+          <SectionHeader title="Categories" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
+            {[{ id: 0, name: 'All', slug: null }, ...categories].map((item) => {
+              const active = item.slug === null ? !selectedCategory : selectedCategory === item.slug;
+              const meta = item.slug === null ? { icon: 'apps', tone: 'primary' } : categoryMeta(item.slug || item.name);
+              return (
+                <Tappable
+                  key={item.id}
+                  onPress={() => handleCategoryFilter(item.slug)}
+                  scaleTo={0.93}
+                  haptic={false}
+                  style={{
+                    width: 96, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4, borderRadius: 20,
+                    backgroundColor: active ? alpha(colors[meta.tone] || colors.primary, 0.14) : colors.card,
+                    borderWidth: 1.5, borderColor: active ? colors[meta.tone] || colors.primary : 'transparent',
+                  }}
+                >
+                  <IconTile icon={meta.icon} tone={meta.tone} size={40} />
+                  <Text style={[type.caption, { color: colors.text, marginTop: 8, fontWeight: active ? '700' : '500' }]} numberOfLines={1}>{item.name}</Text>
+                </Tappable>
+              );
+            })}
+          </ScrollView>
+        </>
+      ) : null}
+
+      <SectionHeader title="Open jobs" action={pagination ? `${pagination.total} live` : undefined} />
+      {loading && list.length === 0 ? <JobListSkeleton count={3} /> : null}
     </View>
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <FlatList
-        data={list}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
-          <JobCard job={item} onPress={() => navigation.navigate('JobDetail', { jobId: item.id })} colors={colors} />
-        )}
-        ListHeaderComponent={Header}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={loadJobs} tintColor={colors.primary} colors={[colors.primary]} />
-        }
-        ListEmptyComponent={
-          !loading ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.bgAlt, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
-                <Ionicons name="search-outline" size={36} color={colors.textTertiary} />
-              </View>
-              <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text, marginBottom: 8, textAlign: 'center' }}>No jobs found</Text>
-              <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 }}>Try adjusting your filters or check back later</Text>
-            </View>
-          ) : null
-        }
-        contentContainerStyle={list.length === 0 ? { flex: 1 } : { paddingBottom: 24 }}
-      />
-    </View>
+    <Screen
+      eyebrow={todayLabel()}
+      title={`${greeting()}, ${firstName}`}
+      right={(
+        <>
+          <NotificationBell />
+          <Tappable onPress={() => navigation.navigate('Profile')} scaleTo={0.9} accessibilityLabel="Profile">
+            <Avatar name={user?.name} uri={user?.avatar_url} size={36} />
+          </Tappable>
+        </>
+      )}
+      header={header}
+      data={list}
+      keyExtractor={(item) => String(item.id)}
+      renderItem={({ item, index }) => (
+        <Appear index={index}>
+          <JobCard job={item} onPress={() => navigation.navigate('JobDetail', { jobId: item.id })} />
+        </Appear>
+      )}
+      refreshing={loading && list.length > 0}
+      onRefresh={() => loadJobs()}
+      ListEmptyComponent={!loading ? (
+        <EmptyState icon="search" title="No jobs found" message="Try another category or search, or check back a little later." />
+      ) : null}
+    />
   );
 }

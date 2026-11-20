@@ -1,31 +1,20 @@
 import React, { useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchNotifications, markNotificationRead, markAllNotificationsRead } from '../../store/notificationSlice';
+import { Screen, Card, IconTile, NavButton, EmptyState, Appear } from '../../components/ui';
 import { useTheme } from '../../context/ThemeContext';
-import { radius, shadows } from '../../theme';
+import { type } from '../../theme';
+import { timeAgo } from '../../utils/categories';
 
-const TYPE_ICON = {
-  new_bid: 'pricetag',
-  bid_accepted: 'checkmark-circle',
-  completion_pending: 'time',
-  job_completed: 'checkmark-done-circle',
-  dispute_raised: 'alert-circle',
-  new_message: 'chatbubble-ellipses',
+const TYPE_META = {
+  new_bid: { icon: 'pricetag', tone: 'primary' },
+  bid_accepted: { icon: 'checkmark-circle', tone: 'success' },
+  completion_pending: { icon: 'time', tone: 'warning' },
+  job_completed: { icon: 'checkmark-done', tone: 'success' },
+  dispute_raised: { icon: 'alert-circle', tone: 'error' },
+  new_message: { icon: 'chatbubble-ellipses', tone: 'indigo' },
 };
-
-function timeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
-}
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
@@ -36,70 +25,42 @@ export default function NotificationsScreen() {
 
   const unreadCount = items.filter((n) => !n.is_read).length;
 
-  const handlePress = (item) => {
-    if (!item.is_read) dispatch(markNotificationRead(item.id));
+  const renderItem = ({ item, index }) => {
+    const meta = TYPE_META[item.type] || { icon: 'notifications', tone: 'primary' };
+    const unread = !item.is_read;
+    return (
+      <Appear index={index}>
+        <Card
+          onPress={() => { if (unread) dispatch(markNotificationRead(item.id)); }}
+          style={{ marginHorizontal: 16, marginBottom: 10, flexDirection: 'row', gap: 12, padding: 14 }}
+        >
+          <IconTile icon={meta.icon} tone={meta.tone} size={40} variant={unread ? 'solid' : 'soft'} style={{ borderRadius: 20 }} />
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[type.subhead, { color: colors.text, fontWeight: unread ? '700' : '500', flex: 1 }]} numberOfLines={1}>{item.title}</Text>
+              <Text style={[type.caption, { color: colors.textTertiary }]}>{timeAgo(item.created_at)}</Text>
+            </View>
+            <Text style={[type.footnote, { color: colors.textSecondary, marginTop: 2 }]}>{item.message}</Text>
+          </View>
+          {unread ? <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary, alignSelf: 'center' }} /> : null}
+        </Card>
+      </Appear>
+    );
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={{
-        flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-        backgroundColor: item.is_read ? colors.card : colors.primaryBg,
-        padding: 16, borderRadius: radius.lg, marginHorizontal: 16, marginVertical: 6,
-        borderWidth: 1, borderColor: item.is_read ? colors.border : colors.primaryBorder,
-        ...shadows.xs,
-      }}
-      onPress={() => handlePress(item)}
-      activeOpacity={0.75}
-    >
-      <View style={{
-        width: 38, height: 38, borderRadius: 19,
-        backgroundColor: item.is_read ? colors.bgAlt : colors.primary,
-        justifyContent: 'center', alignItems: 'center',
-      }}>
-        <Ionicons name={TYPE_ICON[item.type] || 'notifications'} size={18} color={item.is_read ? colors.textTertiary : '#fff'} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 2 }}>{item.title}</Text>
-        <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{item.message}</Text>
-        <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 6 }}>{timeAgo(item.created_at)}</Text>
-      </View>
-      {!item.is_read ? (
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, marginTop: 4 }} />
-      ) : null}
-    </TouchableOpacity>
-  );
-
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {unreadCount > 0 ? (
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 }}>
-          <Text style={{ fontSize: 13, color: colors.textSecondary, fontWeight: '500' }}>{unreadCount} unread</Text>
-          <TouchableOpacity onPress={() => dispatch(markAllNotificationsRead())} activeOpacity={0.7}>
-            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '700' }}>Mark all read</Text>
-          </TouchableOpacity>
-        </View>
+    <Screen
+      title="Notifications"
+      subtitle={unreadCount ? `${unreadCount} unread` : 'You\'re all caught up'}
+      right={unreadCount > 0 ? <NavButton label="Read all" onPress={() => dispatch(markAllNotificationsRead())} /> : null}
+      data={items}
+      keyExtractor={(item) => String(item.id)}
+      renderItem={renderItem}
+      refreshing={loading && items.length > 0}
+      onRefresh={() => dispatch(fetchNotifications())}
+      ListEmptyComponent={!loading ? (
+        <EmptyState icon="notifications" title="No notifications yet" message="We'll let you know when there's news about your jobs." />
       ) : null}
-      <FlatList
-        data={items}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={renderItem}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={() => dispatch(fetchNotifications())} tintColor={colors.primary} colors={[colors.primary]} />
-        }
-        contentContainerStyle={items.length === 0 ? { flex: 1 } : { paddingTop: 8, paddingBottom: 24 }}
-        ListEmptyComponent={
-          !loading ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.bgAlt, justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
-                <Ionicons name="notifications-off-outline" size={36} color={colors.textTertiary} />
-              </View>
-              <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text, marginBottom: 8 }}>No notifications yet</Text>
-              <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center' }}>We'll let you know when something happens</Text>
-            </View>
-          ) : null
-        }
-      />
-    </View>
+    />
   );
 }

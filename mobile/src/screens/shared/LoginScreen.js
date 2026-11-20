@@ -1,18 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
-  ScrollView, StatusBar,
+  View, Text, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView, Animated, StyleSheet, Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, clearError } from '../../store/authSlice';
-import { colors, radius, shadows, typography } from '../../theme';
+import { Button, Glass, Tappable } from '../../components/ui';
+import { useTheme } from '../../context/ThemeContext';
+import { type } from '../../theme';
+
+// Seeded local accounts (backend `npm run seed`); only offered in development builds
+const DEMO_ACCOUNTS = [
+  { label: 'Customer demo', icon: 'home', email: 'customer@demo.local', password: 'customer123' },
+  { label: 'Provider demo', icon: 'construct', email: 'provider@demo.local', password: 'provider123' },
+];
+
+function FloatingBlob({ size, color, style, duration }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(v, { toValue: 1, duration, useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0, duration, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[{
+        position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color,
+        transform: [
+          { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }) },
+          { translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) },
+        ],
+      }, style]}
+    />
+  );
+}
 
 export default function LoginScreen({ navigation }) {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [focused, setFocused] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const dispatch = useDispatch();
   const { loading, error } = useSelector((state) => state.auth);
@@ -32,188 +65,98 @@ export default function LoginScreen({ navigation }) {
     }
   }, [error]);
 
+  const inputStyle = [type.body, { flex: 1, color: colors.text, paddingVertical: 15, outlineStyle: 'none' }];
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <StatusBar barStyle="light-content" backgroundColor={colors.gradientStart} />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero header */}
-        <View style={styles.hero}>
-          <View style={styles.logoWrap}>
-            <Ionicons name="briefcase" size={36} color={colors.white} />
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <LinearGradient colors={colors.gradientHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <FloatingBlob size={260} color="rgba(255,255,255,0.16)" style={{ top: -60, right: -80 }} duration={5200} />
+      <FloatingBlob size={180} color="rgba(255,255,255,0.10)" style={{ top: 220, left: -70 }} duration={6400} />
+
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {/* Brand */}
+          <View style={{ alignItems: 'center', paddingTop: insets.top + 56, paddingBottom: 36, paddingHorizontal: 24 }}>
+            <Glass style={{ width: 84, height: 84, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', backgroundColor: 'rgba(255,255,255,0.22)' }}>
+              <Ionicons name="hammer" size={38} color="#fff" />
+            </Glass>
+            <Text style={[type.largeTitle, { color: '#fff', marginTop: 20, textAlign: 'center' }]}>Services Marketplace</Text>
+            <Text style={[type.callout, { color: 'rgba(255,255,255,0.85)', marginTop: 6, textAlign: 'center' }]}>
+              Trusted local pros. Payment held safely until the job is done.
+            </Text>
           </View>
-          <Text style={styles.heroTitle}>Services{'\n'}Marketplace</Text>
-          <Text style={styles.heroSub}>Connect with trusted professionals</Text>
-        </View>
 
-        {/* Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Welcome back</Text>
-          <Text style={styles.cardSub}>Sign in to your account</Text>
+          {/* Sheet */}
+          <View style={{
+            flex: 1, backgroundColor: colors.bg, borderTopLeftRadius: 34, borderTopRightRadius: 34,
+            paddingHorizontal: 20, paddingTop: 28, paddingBottom: insets.bottom + 24,
+          }}>
+            <Text style={[type.title1, { color: colors.text }]}>Welcome back</Text>
+            <Text style={[type.subhead, { color: colors.textSecondary, marginTop: 4, marginBottom: 22 }]}>Sign in to continue</Text>
 
-          <View style={styles.fieldWrap}>
-            <Text style={styles.fieldLabel}>Email</Text>
-            <View style={[styles.inputRow, focused === 'email' && styles.inputRowFocused]}>
-              <Ionicons name="mail-outline" size={18} color={focused === 'email' ? colors.primary : colors.textTertiary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="you@example.com"
-                placeholderTextColor={colors.textTertiary}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-                onFocus={() => setFocused('email')}
-                onBlur={() => setFocused(null)}
-              />
+            {/* Grouped inputs, iOS style */}
+            <View style={{ backgroundColor: colors.card, borderRadius: 16, overflow: 'hidden' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 }}>
+                <Ionicons name="mail" size={18} color={colors.textTertiary} style={{ marginRight: 12 }} />
+                <TextInput
+                  style={inputStyle}
+                  placeholder="Email"
+                  placeholderTextColor={colors.textTertiary}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                />
+              </View>
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.separator, marginLeft: 46 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 }}>
+                <Ionicons name="lock-closed" size={18} color={colors.textTertiary} style={{ marginRight: 12 }} />
+                <TextInput
+                  style={inputStyle}
+                  placeholder="Password"
+                  placeholderTextColor={colors.textTertiary}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoComplete="password"
+                  textContentType="password"
+                  onSubmitEditing={handleLogin}
+                />
+                <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={10} accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
+                  <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={19} color={colors.textTertiary} />
+                </Pressable>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.fieldWrap}>
-            <Text style={styles.fieldLabel}>Password</Text>
-            <View style={[styles.inputRow, focused === 'password' && styles.inputRowFocused]}>
-              <Ionicons name="lock-closed-outline" size={18} color={focused === 'password' ? colors.primary : colors.textTertiary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                placeholderTextColor={colors.textTertiary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                onFocus={() => setFocused('password')}
-                onBlur={() => setFocused(null)}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={18} color={colors.textTertiary} />
-              </TouchableOpacity>
+            <Button title="Sign In" iconRight="arrow-forward" gradient loading={loading} onPress={handleLogin} style={{ marginTop: 20 }} />
+
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 20 }}>
+              <Text style={[type.subhead, { color: colors.textSecondary }]}>New here? </Text>
+              <Text onPress={() => navigation.navigate('Register')} style={[type.subhead, { color: colors.primary, fontWeight: '600' }]}>Create an account</Text>
             </View>
+
+            {__DEV__ ? (
+              <View style={{ marginTop: 28 }}>
+                <Text style={[type.caption, { color: colors.textTertiary, textAlign: 'center', marginBottom: 10 }]}>TRY A DEMO ACCOUNT</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {DEMO_ACCOUNTS.map((a) => (
+                    <Tappable
+                      key={a.email}
+                      onPress={() => { setEmail(a.email); setPassword(a.password); }}
+                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: 20, backgroundColor: colors.fill }}
+                    >
+                      <Ionicons name={a.icon} size={14} color={colors.text} />
+                      <Text style={[type.footnote, { color: colors.text, fontWeight: '600' }]}>{a.label}</Text>
+                    </Tappable>
+                  ))}
+                </View>
+              </View>
+            ) : null}
           </View>
-
-          <TouchableOpacity
-            style={[styles.btn, loading && styles.btnDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.white} size="small" />
-            ) : (
-              <>
-                <Text style={styles.btnText}>Sign In</Text>
-                <Ionicons name="arrow-forward" size={18} color={colors.white} style={{ marginLeft: 8 }} />
-              </>
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity
-            style={styles.registerBtn}
-            onPress={() => navigation.navigate('Register')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="person-add-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-            <Text style={styles.registerBtnText}>Create an Account</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Demo hint */}
-        <View style={styles.demoHint}>
-          <Ionicons name="information-circle-outline" size={14} color={colors.textTertiary} />
-          <Text style={styles.demoText}>  Demo: customer@test.com · password123</Text>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.primary },
-  scroll: { flexGrow: 1 },
-
-  hero: {
-    alignItems: 'center',
-    paddingTop: 64,
-    paddingBottom: 40,
-    paddingHorizontal: 24,
-    backgroundColor: colors.gradientStart,
-  },
-  logoWrap: {
-    width: 80, height: 80, borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)',
-  },
-  heroTitle: {
-    fontSize: 34, fontWeight: '800', color: colors.white,
-    textAlign: 'center', letterSpacing: -0.5, lineHeight: 40,
-  },
-  heroSub: {
-    fontSize: 14, color: 'rgba(255,255,255,0.72)',
-    marginTop: 8, fontWeight: '400',
-  },
-
-  card: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 28,
-    paddingBottom: 16,
-    flex: 1,
-    ...shadows.lg,
-  },
-  cardTitle: { ...typography.h2, marginBottom: 4 },
-  cardSub: { ...typography.bodySmall, marginBottom: 28 },
-
-  fieldWrap: { marginBottom: 18 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 8 },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1.5, borderColor: colors.border,
-    borderRadius: radius.lg, backgroundColor: colors.bg,
-    paddingHorizontal: 14,
-  },
-  inputRowFocused: { borderColor: colors.primary, backgroundColor: colors.primaryBg },
-  inputIcon: { marginRight: 10 },
-  input: { flex: 1, paddingVertical: 14, fontSize: 15, color: colors.text },
-  eyeBtn: { padding: 4 },
-
-  btn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.primary, paddingVertical: 16,
-    borderRadius: radius.lg, marginTop: 8,
-    ...shadows.md,
-  },
-  btnDisabled: { opacity: 0.65 },
-  btnText: { color: colors.white, fontSize: 16, fontWeight: '700' },
-
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { color: colors.textTertiary, fontSize: 12, marginHorizontal: 12, fontWeight: '500' },
-
-  registerBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: colors.primaryBorder,
-    paddingVertical: 14, borderRadius: radius.lg,
-    backgroundColor: colors.primaryBg,
-  },
-  registerBtnText: { color: colors.primary, fontSize: 15, fontWeight: '700' },
-
-  demoHint: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 16, backgroundColor: colors.white,
-  },
-  demoText: { fontSize: 12, color: colors.textTertiary },
-});
