@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Alert, Platform } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { getMyBids, startWork, markJobComplete } from '../../api/jobs.api';
 import { colors, radius, shadows, typography, statusConfig } from '../../theme';
+import { confirmAction } from '../../utils/dialogs';
 
 export default function MyBidsScreen() {
   const [bids, setBids] = useState([]);
@@ -43,13 +44,8 @@ export default function MyBidsScreen() {
       }
     };
 
-    if (Platform.OS === 'web') {
-      if (window.confirm('Mark this job as complete?')) doComplete();
-    } else {
-      Alert.alert('Mark Complete', 'Mark this job as complete?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Complete', onPress: doComplete },
-      ]);
+    if (await confirmAction('Mark Complete', 'Mark this job as complete?', { confirmText: 'Complete' })) {
+      doComplete();
     }
   };
 

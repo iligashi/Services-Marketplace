@@ -5,6 +5,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { io } from 'socket.io-client';
 import { setMessages, addMessage, markMessagesReadFrom } from '../../store/chatSlice';
 import api from '../../api/axios.instance';
+import { SERVER_URL } from '../../config';
 import { colors, radius, shadows, typography } from '../../theme';
 
 export default function ChatScreen({ route }) {
@@ -22,8 +23,7 @@ export default function ChatScreen({ route }) {
       dispatch(setMessages(data.messages));
     });
 
-    const socketUrl = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://192.168.0.127:3000';
-    const s = io(socketUrl, { auth: { token: accessToken } });
+    const s = io(SERVER_URL, { auth: { token: accessToken } });
     s.on('connect', () => {
       s.emit('join_room', jobId);
       s.emit('mark_read', { jobId });
