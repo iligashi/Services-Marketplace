@@ -5,7 +5,7 @@
 Customers post a job, verified local professionals bid on it, and the customer picks the offer that fits. The customer's money is held by Stripe and only reaches the provider once the work is confirmed. That protects both sides.
 
 ![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
-![React Native](https://img.shields.io/badge/React%20Native-Expo%2052-000020?logo=expo&logoColor=white)
+![React Native](https://img.shields.io/badge/React%20Native-Expo%2058-000020?logo=expo&logoColor=white)
 ![React](https://img.shields.io/badge/Admin-React%20%2B%20Vite-61DAFB?logo=react&logoColor=black)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Payments-Stripe%20Connect-635BFF?logo=stripe&logoColor=white)
@@ -13,8 +13,21 @@ Customers post a job, verified local professionals bid on it, and the customer p
 
 ---
 
+## Live deployment
+
+| Part | Where |
+| --- | --- |
+| Admin dashboard | [marketplace-admin-ie1u.onrender.com](https://marketplace-admin-ie1u.onrender.com) |
+| API | [marketplace-api-b0sd.onrender.com](https://marketplace-api-b0sd.onrender.com/api/health) (health check at `/api/health`) |
+| Mobile app | Expo Go, through EAS Update (see [Try it in Expo Go](#try-it-in-expo-go-without-a-store-build-free)) |
+
+Everything runs on free tiers (Render, TiDB Cloud, Expo). The API sleeps when idle, so the first request can take about a minute. Card payments stay off until Stripe keys are added to the API's environment.
+
+---
+
 ## Contents
 
+- [Live deployment](#live-deployment)
 - [The business idea](#the-business-idea)
 - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
@@ -238,7 +251,7 @@ Each job has a `payment_mode`, which an admin can change through the API:
 | **Database** | MySQL 8 through `mysql2` (pooled, parameterised queries) |
 | **Realtime** | Socket.IO 4, with JWT-authenticated handshake |
 | **Payments** | Stripe PaymentIntents with manual capture (escrow), Stripe Connect transfers, signed webhooks |
-| **Mobile app** | React Native 0.76 with Expo SDK 52, Redux Toolkit, React Navigation, Axios, socket.io-client. Runs on iOS, Android and the web through `react-native-web` |
+| **Mobile app** | React Native 0.88 with Expo SDK 58 and React 19, Redux Toolkit, React Navigation 7, Axios, socket.io-client. Runs on iOS, Android and the web through `react-native-web` |
 | **Admin dashboard** | React 18 and Vite 5, served by nginx in Docker |
 | **Notifications** | Expo Server SDK (push) plus in-app notifications |
 | **Infrastructure** | Docker Compose (MySQL 8, Redis 7, API, admin) |
@@ -463,7 +476,7 @@ EXPO_PUBLIC_SERVER_URL=https://marketplace-api-b0sd.onrender.com npx expo export
 npx eas-cli update --branch production --platform ios --skip-bundler --input-dir dist --message "describe the change"
 ```
 
-`runtimeVersion` uses the `sdkVersion` policy so Expo Go can load these updates.
+`runtimeVersion` uses the `sdkVersion` policy so Expo Go can load these updates. Push notifications do not work inside Expo Go; they need a store or TestFlight build.
 
 ---
 
@@ -554,7 +567,9 @@ This project is in active development. These items are known and planned:
 - [ ] **Cash option** in the Post Job form.
 - [ ] Better error states in the mobile job details screen.
 - [ ] CI pipeline (lint, tests, builds) and a LICENSE.
-- [ ] Production deployment guide (managed MySQL, Redis, API host, admin on static hosting, EAS builds).
+- [ ] **Persistent uploads:** the free API host has no disk, so uploaded photos are lost on restart. Move them to object storage.
+- [ ] **Store release:** iOS and Android store builds through EAS, with a unique bundle identifier.
+- [x] Production deployment guide (managed MySQL, Redis, API host, admin on static hosting, EAS builds and updates).
 
 ---
 
