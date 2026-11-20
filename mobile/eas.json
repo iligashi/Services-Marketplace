@@ -1,0 +1,26 @@
+{
+  "cli": {
+    "version": ">= 13.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://marketplace-api.onrender.com"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://marketplace-api.onrender.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
