@@ -73,7 +73,7 @@ function databaseConfig() {
     const name = decodeURIComponent(url.pathname.replace(/^\//, ''));
     if (name && !process.env.DB_NAME) db.database = name;
     const mode = url.searchParams.get('ssl-mode') || url.searchParams.get('sslmode') || '';
-    if (/^(required|verify_ca|verify_identity)$/i.test(mode)) sslRequired = true;
+    if (/^(required|verify_ca|verify_identity)$/i.test(mode) || url.searchParams.has('ssl')) sslRequired = true;
   }
   const ca = process.env.DB_SSL_CA ? process.env.DB_SSL_CA.replace(/\n/g, '\n') : undefined;
   if (sslRequired || ca) db.ssl = { ca, rejectUnauthorized: true };

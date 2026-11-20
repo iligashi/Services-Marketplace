@@ -3,6 +3,7 @@ const { AppError } = require('../middleware/error.middleware');
 const { paginate, paginationMeta } = require('../utils/pagination');
 const { releaseEscrowForJob } = require('../services/escrow.service');
 const { createNotification } = require('../services/notification.service');
+const { hasJobsFulltext, likeContains } = require('../services/search.service');
 
 // Shared by the customer and provider confirmation endpoints: only report
 // completion (and a released payment) when that actually happened.
@@ -52,13 +53,21 @@ exports.getAll = async (req, res, next) => {
       params.push(status);
     }
     if (search) {
-      // Boolean-mode fulltext search with prefix wildcards on each word, falls back
-      // to LIKE for queries too short for the fulltext min word length (default 4 chars)
       const words = search.trim().split(/\s+/).filter(Boolean);
-      const booleanQuery = words.map((w) => `+${w.replace(/[+\-<>()~*"@]/g, '')}*`).join(' ');
-      if (booleanQuery) {
-        where += ' AND (MATCH(j.title, j.description) AGAINST (? IN BOOLEAN MODE) OR j.title LIKE ? OR j.description LIKE ?)';
-        params.push(booleanQuery, `%${search}%`, `%${search}%`);
+      if (await hasJobsFulltext()) {
+        // Boolean-mode fulltext search with prefix wildcards on each word, falls back
+        // to LIKE for queries too short for the fulltext min word length (default 4 chars)
+        const booleanQuery = words.map((w) => `+${w.replace(/[+\-<>()~*"@]/g, '')}*`).join(' ');
+        if (booleanQuery) {
+          where += ' AND (MATCH(j.title, j.description) AGAINST (? IN BOOLEAN MODE) OR j.title LIKE ? OR j.description LIKE ?)';
+          params.push(booleanQuery, likeContains(search), likeContains(search));
+        }
+      } else {
+        // No full-text index: every word must appear in the title or description
+        for (const w of words) {
+          where += ' AND (j.title LIKE ? OR j.description LIKE ?)';
+          params.push(likeContains(w), likeContains(w));
+        }
       }
     }
 

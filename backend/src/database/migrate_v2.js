@@ -28,6 +28,10 @@ async function migrate() {
       } catch (err) {
         if (err.errno === 1060 || err.errno === 1061) {
           console.log('SKIP (already exists):', sql);
+        } else if (/FULLTEXT/i.test(sql)) {
+          // Some MySQL-compatible databases (e.g. TiDB) have no full-text
+          // indexes; search falls back to LIKE matching (search.service.js)
+          console.warn('SKIP (full-text index not supported here):', err.message);
         } else {
           throw err;
         }
