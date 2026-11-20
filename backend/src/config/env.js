@@ -42,11 +42,14 @@ const trustProxy = (value) => {
   return /^\d+$/.test(value) ? Number(value) : value;
 };
 
-// Hosts injected by a platform (e.g. Render's `host` property) come without a
-// scheme; CORS origins need one.
+// Hosts injected by a platform come without a scheme, and Render's `host`
+// property is the bare service name (e.g. "marketplace-admin-ie1u"), whose
+// public address is <name>.onrender.com. CORS origins need the full URL.
 const origin = (value, fallback) => {
-  const v = (value || fallback).trim().replace(/\/+$/, '');
-  return /^https?:\/\//.test(v) ? v : `https://${v}`;
+  let v = (value || fallback).trim().replace(/\/+$/, '');
+  if (/^https?:\/\//.test(v)) return v;
+  if (!v.includes('.') && !v.startsWith('localhost')) v = `${v}.onrender.com`;
+  return `https://${v}`;
 };
 
 // Database connection. DATABASE_URL (mysql://user:pass@host:port/db, as given

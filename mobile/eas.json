@@ -10,13 +10,13 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_SERVER_URL": "https://marketplace-api.onrender.com"
+        "EXPO_PUBLIC_SERVER_URL": "https://marketplace-api-b0sd.onrender.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_SERVER_URL": "https://marketplace-api.onrender.com"
+        "EXPO_PUBLIC_SERVER_URL": "https://marketplace-api-b0sd.onrender.com"
       }
     }
   },
