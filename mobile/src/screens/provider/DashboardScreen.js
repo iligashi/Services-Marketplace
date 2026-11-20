@@ -1,14 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl } from 'react-native';
+import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSelector } from 'react-redux';
 import api from '../../api/axios.instance';
 import StarRating from '../../components/StarRating';
-import { radius, shadows } from '../../theme';
-import { useTheme } from '../../context/ThemeContext';
+import Avatar from '../../components/Avatar';
 import NotificationBell from '../../components/NotificationBell';
+import { Screen, Card, IconTile, SectionHeader, EmptyState, Appear, Tappable, Section, Row } from '../../components/ui';
+import { useTheme } from '../../context/ThemeContext';
+import { type, shadows } from '../../theme';
+import { greeting, money, todayLabel } from '../../utils/categories';
 
-export default function DashboardScreen() {
+const BADGE_ICON = { elite_pro: 'trophy', top_rated: 'star', verified: 'shield-checkmark' };
+
+function StatTile({ icon, tone, value, label, index }) {
+  const { colors } = useTheme();
+  return (
+    <Appear index={index} style={{ width: '50%', padding: 6 }}>
+      <Card style={{ padding: 16 }}>
+        <IconTile icon={icon} tone={tone} size={34} variant="soft" />
+        <Text style={[type.title1, { color: colors.text, marginTop: 12 }]}>{value}</Text>
+        <Text style={[type.footnote, { color: colors.textSecondary }]}>{label}</Text>
+      </Card>
+    </Appear>
+  );
+}
+
+export default function DashboardScreen({ navigation }) {
   const { colors } = useTheme();
   const [stats, setStats] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -27,96 +46,93 @@ export default function DashboardScreen() {
 
   useEffect(() => { loadDashboard(); }, []);
 
-  const getGreeting = () => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
-
-  if (!stats && !loading) return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: colors.bg }}>
-      <Ionicons name="cloud-offline-outline" size={48} color={colors.textTertiary} />
-      <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text, marginTop: 16, marginBottom: 8, textAlign: 'center' }}>Couldn't load dashboard</Text>
-      <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center' }}>Pull down to retry</Text>
-    </View>
-  );
+  const firstName = user?.name?.split(' ')[0] || 'there';
+  const rating = parseFloat(profile?.avg_rating) || 0;
+  const feeRate = profile?.fee_rate;
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={loadDashboard} tintColor={colors.primary} colors={[colors.primary]} />}
-      showsVerticalScrollIndicator={false}
+    <Screen
+      eyebrow={todayLabel()}
+      title={`${greeting()}, ${firstName}`}
+      right={(
+        <>
+          <NotificationBell />
+          <Tappable onPress={() => navigation.navigate('Profile')} scaleTo={0.9} accessibilityLabel="Profile">
+            <Avatar name={user?.name} uri={user?.avatar_url} size={36} />
+          </Tappable>
+        </>
+      )}
+      refreshing={loading && !!stats}
+      onRefresh={loadDashboard}
     >
-      {/* Header banner */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', backgroundColor: colors.gradientStart, padding: 24, paddingTop: 20 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '500' }}>{getGreeting()},</Text>
-          <Text style={{ fontSize: 26, fontWeight: '800', color: '#fff', marginTop: 2, marginBottom: 8 }}>{user?.name?.split(' ')[0] || 'Provider'}</Text>
-          {profile?.avg_rating ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <StarRating rating={profile.avg_rating} size={14} />
-              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '500' }}>{parseFloat(profile.avg_rating).toFixed(1)} · {profile.total_jobs_done} jobs</Text>
-              {profile.badge ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 }}>
-                  <Ionicons name={profile.badge.tier === 'elite_pro' ? 'trophy' : profile.badge.tier === 'top_rated' ? 'star' : 'shield-checkmark'} size={11} color="#fff" />
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>{profile.badge.label}</Text>
+      {!stats && !loading ? (
+        <EmptyState icon="cloud-offline" tone="textSecondary" title="Couldn't load your dashboard" message="Check your connection and try again." actionLabel="Try again" onAction={loadDashboard} />
+      ) : (
+        <>
+          {/* Wallet card */}
+          <Appear>
+            <LinearGradient
+              colors={colors.gradientHero}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[{ marginHorizontal: 16, borderRadius: 28, padding: 22, overflow: 'hidden' }, shadows.glow(colors.indigo)]}
+            >
+              <View style={{ position: 'absolute', right: -40, top: -40, width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+              <View style={{ position: 'absolute', left: -30, bottom: -60, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.07)' }} />
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={[type.footnote, { color: 'rgba(255,255,255,0.85)', fontWeight: '600' }]}>Total earned</Text>
+                <Ionicons name="wallet" size={20} color="rgba(255,255,255,0.9)" />
+              </View>
+              <Text style={{ fontSize: 44, fontWeight: '700', color: '#fff', letterSpacing: -0.5, marginTop: 2 }}>
+                {money(stats?.total_earnings)}
+              </Text>
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 16, padding: 12 }}>
+                  <Text style={[type.caption, { color: 'rgba(255,255,255,0.8)' }]}>Pending payout</Text>
+                  <Text style={[type.title3, { color: '#fff', fontWeight: '700', marginTop: 2 }]}>{money(stats?.pending_earnings)}</Text>
+                </View>
+                <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 16, padding: 12 }}>
+                  <Text style={[type.caption, { color: 'rgba(255,255,255,0.8)' }]}>Your rating</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                    <Text style={[type.title3, { color: '#fff', fontWeight: '700' }]}>{rating > 0 ? rating.toFixed(1) : 'New'}</Text>
+                    {rating > 0 ? <StarRating rating={rating} size={11} color="#fff" /> : null}
+                  </View>
+                </View>
+              </View>
+
+              {profile?.badge ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 }}>
+                  <Ionicons name={BADGE_ICON[profile.badge.tier] || 'ribbon'} size={14} color="#fff" />
+                  <Text style={[type.footnote, { color: '#fff', fontWeight: '600' }]}>{profile.badge.label}</Text>
+                  <Text style={[type.footnote, { color: 'rgba(255,255,255,0.75)' }]}>· {profile.total_jobs_done} jobs done</Text>
                 </View>
               ) : null}
-            </View>
-          ) : null}
-          {profile?.fee_rate !== undefined ? (
-            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 6 }}>
-              Platform fee: {profile.fee_rate}% {profile.fee_rate < 12 ? '(reduced for your tier)' : ''}
-            </Text>
-          ) : null}
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <NotificationBell light />
-          <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }}>
-            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>{user?.name?.charAt(0)?.toUpperCase() || 'P'}</Text>
-          </View>
-        </View>
-      </View>
+            </LinearGradient>
+          </Appear>
 
-      {/* Earnings cards */}
-      <View style={{ flexDirection: 'row', gap: 12, margin: 16, marginBottom: 8 }}>
-        <View style={{ flex: 1, padding: 18, borderRadius: radius.xl, backgroundColor: colors.primary, ...shadows.md }}>
-          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-            <Ionicons name="wallet-outline" size={22} color="#fff" />
+          <SectionHeader title="Performance" />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10 }}>
+            <StatTile index={1} icon="briefcase" tone="primary" value={stats?.active_jobs ?? '—'} label="Active jobs" />
+            <StatTile index={2} icon="document-text" tone="purple" value={stats?.total_bids ?? '—'} label="Bids sent" />
+            <StatTile index={3} icon="trending-up" tone="success" value={stats ? `${stats.bid_success_rate}%` : '—'} label="Win rate" />
+            <StatTile index={4} icon="checkmark-circle" tone="teal" value={stats?.accepted_bids ?? '—'} label="Bids won" />
           </View>
-          <Text style={{ fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.8)', marginBottom: 4 }}>Total Earnings</Text>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: '#fff' }}>${parseFloat(stats?.total_earnings || 0).toLocaleString()}</Text>
-        </View>
-        <View style={{ flex: 1, padding: 18, borderRadius: radius.xl, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, ...shadows.md }}>
-          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-            <Ionicons name="hourglass-outline" size={22} color={colors.warning} />
-          </View>
-          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 4 }}>Pending</Text>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: colors.warning }}>${parseFloat(stats?.pending_earnings || 0).toLocaleString()}</Text>
-        </View>
-      </View>
 
-      {/* Stats grid */}
-      <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginHorizontal: 16, marginTop: 8, marginBottom: 12 }}>Performance</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, gap: 10, marginBottom: 24 }}>
-        <StatCard icon="briefcase" label="Active Jobs" value={stats?.active_jobs ?? '—'} color={colors.primary} bg={colors.primaryBg} textColor={colors.textSecondary} />
-        <StatCard icon="document-text" label="Total Bids" value={stats?.total_bids ?? '—'} color="#7C3AED" bg="#EDE9FE" textColor={colors.textSecondary} />
-        <StatCard icon="trending-up" label="Success Rate" value={stats ? `${stats.bid_success_rate}%` : '—'} color={colors.success} bg={colors.successBg} textColor={colors.textSecondary} />
-        <StatCard icon="checkmark-circle" label="Accepted" value={stats?.accepted_bids ?? '—'} color={colors.info} bg={colors.infoBg} textColor={colors.textSecondary} />
-      </View>
-    </ScrollView>
-  );
-}
-
-function StatCard({ icon, label, value, color, bg, textColor }) {
-  return (
-    <View style={{ width: '47%', padding: 18, borderRadius: radius.xl, marginHorizontal: 4, backgroundColor: bg }}>
-      <View style={{ width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12, backgroundColor: color + '22' }}>
-        <Ionicons name={icon} size={20} color={color} />
-      </View>
-      <Text style={{ fontSize: 26, fontWeight: '800', marginBottom: 4, color }}>{value}</Text>
-      <Text style={{ fontSize: 12, fontWeight: '600', color: textColor }}>{label}</Text>
-    </View>
+          <Section title="Grow your business" separatorInset={58}>
+            <Row
+              icon="pricetag"
+              iconTone="indigo"
+              title="Platform fee"
+              subtitle={feeRate !== undefined && feeRate < 12 ? 'Reduced for your tier' : 'Get verified to pay 11%'}
+              value={feeRate !== undefined ? `${feeRate}%` : '12%'}
+            />
+            <Row icon="search" iconTone="primary" title="Find new jobs" subtitle="Matched to your skills" chevron onPress={() => navigation.navigate('BrowseTab')} />
+            <Row icon="person-circle" iconTone="accent" title="Polish your profile" subtitle="Skills and bio help you win more bids" chevron onPress={() => navigation.navigate('Profile')} />
+          </Section>
+        </>
+      )}
+    </Screen>
   );
 }

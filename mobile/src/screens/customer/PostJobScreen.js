@@ -1,16 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, KeyboardAvoidingView, Platform,
-} from 'react-native';
+import { View, Text, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchCategories } from '../../store/jobSlice';
 import api from '../../api/axios.instance';
-import { colors, radius, shadows, typography } from '../../theme';
+import JobCard from '../../components/JobCard';
+import { Screen, Field, Button, IconTile, Tappable, Appear, alpha } from '../../components/ui';
+import { useTheme } from '../../context/ThemeContext';
+import { type } from '../../theme';
+import { categoryMeta } from '../../utils/categories';
+import { successFeedback, tapFeedback } from '../../utils/haptics';
+
+function Step({ number, title, done, children }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ marginHorizontal: 16, marginBottom: 26 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, marginLeft: 4 }}>
+        <View style={{
+          width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+          backgroundColor: done ? colors.success : colors.fillStrong,
+        }}>
+          {done
+            ? <Ionicons name="checkmark" size={15} color="#fff" />
+            : <Text style={[type.caption2, { color: colors.text }]}>{number}</Text>}
+        </View>
+        <Text style={[type.headline, { color: colors.text }]}>{title}</Text>
+      </View>
+      {children}
+    </View>
+  );
+}
 
 export default function PostJobScreen() {
   const dispatch = useDispatch();
+  const { colors } = useTheme();
   const { categories } = useSelector((state) => state.jobs);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -18,7 +41,6 @@ export default function PostJobScreen() {
   const [categoryId, setCategoryId] = useState(null);
   const [address, setAddress] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [focused, setFocused] = useState(null);
 
   useEffect(() => {
     if (categories.length === 0) dispatch(fetchCategories());
@@ -40,6 +62,7 @@ export default function PostJobScreen() {
       if (categoryId) body.category_id = categoryId;
       if (address) body.location_address = address;
       await api.post('/jobs', body);
+      successFeedback();
       Alert.alert('Posted!', 'Your job is live. Providers will start bidding soon.');
       setTitle(''); setDescription(''); setBudget(''); setCategoryId(null); setAddress('');
     } catch (err) {
@@ -49,215 +72,87 @@ export default function PostJobScreen() {
     }
   };
 
-  const fo = (field) => ({ onFocus: () => setFocused(field), onBlur: () => setFocused(null) });
-  const selectedCat = categories.find(c => c.id === categoryId);
+  const selectedCat = categories.find((c) => c.id === categoryId);
   const isReady = title.length >= 5 && description.length >= 10;
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-
-        <Text style={styles.intro}>Describe your job clearly to attract the best bids.</Text>
-
-        {/* Category */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="grid-outline" size={16} color={colors.primary} />
-            <Text style={styles.sectionLabel}>Category</Text>
-            <Text style={styles.optional}>optional</Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipList}>
-            {categories.map((cat) => {
-              const active = categoryId === cat.id;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => setCategoryId(active ? null : cat.id)}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{cat.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+    <Screen title="New Job" subtitle="Tell pros what you need. Offers usually arrive within hours.">
+      <Step number="1" title="Pick a category" done={!!categoryId}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {categories.map((cat) => {
+            const active = categoryId === cat.id;
+            const meta = categoryMeta(cat.slug || cat.name);
+            const tint = colors[meta.tone] || colors.primary;
+            return (
+              <Tappable
+                key={cat.id}
+                onPress={() => { tapFeedback(); setCategoryId(active ? null : cat.id); }}
+                haptic={false}
+                scaleTo={0.95}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 6, paddingRight: 14, height: 44, borderRadius: 22,
+                  backgroundColor: active ? alpha(tint, 0.14) : colors.card,
+                  borderWidth: 1.5, borderColor: active ? tint : 'transparent',
+                }}
+              >
+                <IconTile icon={meta.icon} tone={meta.tone} size={30} style={{ borderRadius: 15 }} />
+                <Text style={[type.subhead, { color: colors.text, fontWeight: active ? '600' : '400' }]}>{cat.name}</Text>
+              </Tappable>
+            );
+          })}
         </View>
+      </Step>
 
-        {/* Title */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="pencil-outline" size={16} color={colors.primary} />
-            <Text style={styles.sectionLabel}>Job Title</Text>
-            <Text style={styles.required}>required</Text>
-          </View>
-          <TextInput
-            style={[styles.input, focused === 'title' && styles.inputFocused]}
-            placeholder="e.g. Fix leaking kitchen faucet"
-            placeholderTextColor={colors.textTertiary}
-            value={title}
-            onChangeText={setTitle}
-            {...fo('title')}
+      <Step number="2" title="Describe the job" done={isReady}>
+        <Field
+          placeholder="e.g. Fix leaking kitchen faucet"
+          value={title}
+          onChangeText={setTitle}
+          maxLength={100}
+          hint={title.length < 5 ? 'At least 5 characters' : `${title.length}/100`}
+        />
+        <Field
+          placeholder="What needs doing? Mention size, materials, access and timing…"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          style={{ marginTop: 12 }}
+          hint={description.length < 10 ? 'At least 10 characters' : `${description.length} characters`}
+        />
+      </Step>
+
+      <Step number="3" title="Budget and location" done={!!budget && !!address}>
+        <Field prefix="$" placeholder="0" value={budget} onChangeText={setBudget} keyboardType="numeric" suffix="USD" large />
+        <Field icon="location" placeholder="Address or neighbourhood" value={address} onChangeText={setAddress} style={{ marginTop: 12 }} />
+      </Step>
+
+      {isReady ? (
+        <Appear>
+          <Text style={[type.footnote, { color: colors.textSecondary, textTransform: 'uppercase', marginLeft: 32, marginBottom: 8 }]}>Preview</Text>
+          <JobCard
+            job={{
+              title, description, status: 'open', created_at: new Date().toISOString(),
+              budget: budget || null, category_name: selectedCat?.name, category_slug: selectedCat?.slug,
+              location_address: address || null,
+            }}
           />
-          <Text style={styles.hint}>{title.length}/100 characters</Text>
-        </View>
+        </Appear>
+      ) : null}
 
-        {/* Description */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={16} color={colors.primary} />
-            <Text style={styles.sectionLabel}>Description</Text>
-            <Text style={styles.required}>required</Text>
-          </View>
-          <TextInput
-            style={[styles.input, styles.textArea, focused === 'desc' && styles.inputFocused]}
-            placeholder="Describe the work in detail — location, materials needed, urgency..."
-            placeholderTextColor={colors.textTertiary}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            textAlignVertical="top"
-            {...fo('desc')}
-          />
-          <Text style={styles.hint}>{description.length} characters</Text>
-        </View>
-
-        {/* Budget */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="cash-outline" size={16} color={colors.primary} />
-            <Text style={styles.sectionLabel}>Budget</Text>
-            <Text style={styles.optional}>optional</Text>
-          </View>
-          <View style={[styles.budgetRow, focused === 'budget' && styles.inputFocused]}>
-            <Text style={styles.currencySymbol}>$</Text>
-            <TextInput
-              style={styles.budgetInput}
-              placeholder="0.00"
-              placeholderTextColor={colors.textTertiary}
-              value={budget}
-              onChangeText={setBudget}
-              keyboardType="numeric"
-              {...fo('budget')}
-            />
-            <Text style={styles.currencyCode}>USD</Text>
-          </View>
-        </View>
-
-        {/* Location */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="location-outline" size={16} color={colors.primary} />
-            <Text style={styles.sectionLabel}>Location</Text>
-            <Text style={styles.optional}>optional</Text>
-          </View>
-          <View style={[styles.inputRow, focused === 'addr' && styles.inputFocused]}>
-            <Ionicons name="map-outline" size={16} color={focused === 'addr' ? colors.primary : colors.textTertiary} style={{ marginRight: 10 }} />
-            <TextInput
-              style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent', marginBottom: 0 }]}
-              placeholder="Address or neighborhood"
-              placeholderTextColor={colors.textTertiary}
-              value={address}
-              onChangeText={setAddress}
-              {...fo('addr')}
-            />
-          </View>
-        </View>
-
-        {/* Summary preview */}
-        {isReady ? (
-          <View style={styles.preview}>
-            <View style={styles.previewHeader}>
-              <Ionicons name="eye-outline" size={16} color={colors.primary} />
-              <Text style={styles.previewTitle}>Preview</Text>
-            </View>
-            <Text style={styles.previewJobTitle}>{title}</Text>
-            {selectedCat ? <Text style={styles.previewMeta}><Ionicons name="grid-outline" size={12} /> {selectedCat.name}</Text> : null}
-            {budget ? <Text style={styles.previewBudget}>${budget} budget</Text> : null}
-          </View>
-        ) : null}
-
-        {/* Submit */}
-        <TouchableOpacity
-          style={[styles.submitBtn, (!isReady || submitting) && styles.submitBtnDisabled]}
+      <View style={{ marginHorizontal: 16, marginTop: 12 }}>
+        <Button
+          title={submitting ? 'Posting…' : 'Post Job'}
+          icon="paper-plane"
+          gradient
+          loading={submitting}
+          disabled={!isReady}
           onPress={handleSubmit}
-          disabled={!isReady || submitting}
-          activeOpacity={0.85}
-        >
-          {submitting ? (
-            <Text style={styles.submitText}>Posting...</Text>
-          ) : (
-            <>
-              <Ionicons name="send-outline" size={18} color={colors.white} style={{ marginRight: 8 }} />
-              <Text style={styles.submitText}>Post Job</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+          <Ionicons name="lock-closed" size={12} color={colors.textSecondary} />
+          <Text style={[type.caption, { color: colors.textSecondary }]}>Payment is held safely until you confirm the work is done</Text>
+        </View>
+      </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 20, paddingBottom: 48 },
-
-  intro: { ...typography.bodySmall, marginBottom: 24, lineHeight: 20 },
-
-  section: { marginBottom: 24 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 6 },
-  sectionLabel: { fontSize: 14, fontWeight: '700', color: colors.text, flex: 1 },
-  required: { fontSize: 11, fontWeight: '600', color: colors.error, backgroundColor: colors.errorBg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.full },
-  optional: { fontSize: 11, fontWeight: '600', color: colors.textTertiary, backgroundColor: colors.bgAlt, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.full },
-
-  input: {
-    backgroundColor: colors.white, padding: 14, borderRadius: radius.lg,
-    fontSize: 15, color: colors.text,
-    borderWidth: 1.5, borderColor: colors.border,
-  },
-  inputFocused: { borderColor: colors.primary, backgroundColor: colors.primaryBg },
-  textArea: { minHeight: 120, paddingTop: 14, textAlignVertical: 'top' },
-  hint: { fontSize: 11, color: colors.textTertiary, marginTop: 6, textAlign: 'right' },
-
-  inputRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.white, borderRadius: radius.lg,
-    borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: 14,
-  },
-
-  budgetRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.white, borderRadius: radius.lg,
-    borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: 16,
-  },
-  currencySymbol: { fontSize: 22, fontWeight: '800', color: colors.success, marginRight: 4 },
-  budgetInput: { flex: 1, paddingVertical: 14, fontSize: 22, fontWeight: '700', color: colors.text },
-  currencyCode: { fontSize: 13, fontWeight: '600', color: colors.textTertiary },
-
-  chipList: { gap: 8, paddingBottom: 4 },
-  chip: {
-    paddingHorizontal: 16, paddingVertical: 9, borderRadius: radius.full,
-    backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border, marginRight: 8,
-  },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  chipTextActive: { color: colors.white },
-
-  preview: {
-    backgroundColor: colors.primaryBg, padding: 18,
-    borderRadius: radius.xl, marginBottom: 24,
-    borderWidth: 1.5, borderColor: colors.primaryBorder,
-  },
-  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  previewTitle: { fontSize: 12, fontWeight: '700', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
-  previewJobTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 6 },
-  previewMeta: { fontSize: 13, color: colors.textSecondary, marginBottom: 4 },
-  previewBudget: { fontSize: 15, fontWeight: '700', color: colors.success },
-
-  submitBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.primary, paddingVertical: 17,
-    borderRadius: radius.lg, ...shadows.md,
-  },
-  submitBtnDisabled: { backgroundColor: colors.bgAlt, ...shadows.xs },
-  submitText: { color: colors.white, fontSize: 16, fontWeight: '700' },
-});

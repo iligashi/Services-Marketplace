@@ -1,15 +1,31 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, Alert, StyleSheet } from 'react-native';
 import { submitBid } from '../../api/jobs.api';
-import { colors, radius, shadows, typography, statusConfig } from '../../theme';
+import { Screen, Card, Field, Button, IconTile, Pill, Tappable } from '../../components/ui';
+import { useTheme } from '../../context/ThemeContext';
+import { type } from '../../theme';
+import { categoryMeta, money } from '../../utils/categories';
+import { successFeedback } from '../../utils/haptics';
+
+const PLATFORM_FEE = 0.12;
+
+function Line({ label, value, color, bold }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
+      <Text style={[type.subhead, { color: bold ? colors.text : colors.textSecondary, fontWeight: bold ? '600' : '400' }]}>{label}</Text>
+      <Text style={[bold ? type.title3 : type.subhead, { color: color || colors.text, fontWeight: bold ? '700' : '500' }]}>{value}</Text>
+    </View>
+  );
+}
 
 export default function SubmitBidScreen({ route, navigation }) {
   const { job } = route.params;
+  const { colors } = useTheme();
   const [amount, setAmount] = useState(job.budget?.toString() || '');
   const [message, setMessage] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [focused, setFocused] = useState(null);
 
   const handleSubmit = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -24,6 +40,7 @@ export default function SubmitBidScreen({ route, navigation }) {
         message: message || undefined,
         estimated_hours: estimatedHours ? parseInt(estimatedHours, 10) : undefined,
       });
+      successFeedback();
       Alert.alert('Bid Submitted!', 'The customer will review your bid.');
       navigation.goBack();
     } catch (err) {
@@ -31,161 +48,91 @@ export default function SubmitBidScreen({ route, navigation }) {
     } finally { setSubmitting(false); }
   };
 
+  const cat = categoryMeta(job.category_slug || job.category_name);
+  const value = parseFloat(amount) || 0;
+  const budget = parseFloat(job.budget) || 0;
+  const quick = budget
+    ? [
+      { label: 'Match budget', v: budget },
+      { label: '−5%', v: Math.round(budget * 0.95) },
+      { label: '−10%', v: Math.round(budget * 0.9) },
+    ]
+    : [];
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Job Summary */}
-      <View style={styles.jobCard}>
-        <View style={styles.jobHeader}>
-          {job.category_name ? (
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{job.category_name}</Text>
-            </View>
-          ) : null}
+    <Screen
+      title="Your Offer"
+      large={false}
+      footer={<Button title={submitting ? 'Sending…' : 'Submit Bid'} icon="paper-plane" loading={submitting} disabled={value <= 0} onPress={handleSubmit} />}
+    >
+      {/* Job summary */}
+      <Card style={{ marginHorizontal: 16, marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <IconTile icon={cat.icon} tone={cat.tone} size={32} />
+          <Text style={[type.footnote, { color: colors.textSecondary, flex: 1 }]}>{job.category_name || 'General'}</Text>
+          {job.location_address ? <Pill label={job.location_address} icon="location" tone="textSecondary" size="sm" /> : null}
         </View>
-        <Text style={styles.jobTitle}>{job.title}</Text>
-        <Text style={styles.jobDesc} numberOfLines={3}>{job.description}</Text>
-        <View style={styles.jobMeta}>
-          {job.budget ? (
-            <View style={styles.jobMetaItem}>
-              <Text style={styles.jobMetaLabel}>{'Customer Budget'}</Text>
-              <Text style={styles.jobMetaValue}>{`$${parseFloat(job.budget).toLocaleString()}`}</Text>
-            </View>
-          ) : null}
-          {job.location_address ? (
-            <View style={styles.jobMetaItem}>
-              <Text style={styles.jobMetaLabel}>{'Location'}</Text>
-              <Text style={styles.jobMetaValue}>{job.location_address}</Text>
-            </View>
-          ) : null}
+        <Text style={[type.title3, { color: colors.text }]}>{job.title}</Text>
+        <Text style={[type.subhead, { color: colors.textSecondary, marginTop: 6 }]} numberOfLines={3}>{job.description}</Text>
+        {budget ? (
+          <Text style={[type.footnote, { color: colors.textSecondary, marginTop: 10 }]}>
+            Customer budget <Text style={{ color: colors.text, fontWeight: '700' }}>{money(budget)}</Text>
+          </Text>
+        ) : null}
+      </Card>
+
+      {/* Amount */}
+      <View style={{ alignItems: 'center', marginTop: 30 }}>
+        <Text style={[type.footnote, { color: colors.textSecondary, fontWeight: '600' }]}>YOUR PRICE</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+          <Text style={{ fontSize: 40, fontWeight: '600', color: colors.textTertiary }}>$</Text>
+          <TextInput
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="numeric"
+            placeholder="0"
+            placeholderTextColor={colors.textTertiary}
+            accessibilityLabel="Bid amount"
+            style={{ fontSize: 56, fontWeight: '700', color: colors.text, minWidth: 80, textAlign: 'center', outlineStyle: 'none', letterSpacing: -1 }}
+          />
         </View>
+        {quick.length ? (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+            {quick.map((q) => {
+              const active = value === q.v;
+              return (
+                <Tappable
+                  key={q.label}
+                  onPress={() => setAmount(String(q.v))}
+                  style={{ paddingHorizontal: 14, height: 32, borderRadius: 16, justifyContent: 'center', backgroundColor: active ? colors.primary : colors.fill }}
+                >
+                  <Text style={[type.footnote, { fontWeight: '600', color: active ? '#fff' : colors.text }]}>{q.label}</Text>
+                </Tappable>
+              );
+            })}
+          </View>
+        ) : null}
       </View>
 
-      {/* Bid Form */}
-      <Text style={styles.sectionTitle}>YOUR BID</Text>
-
-      <Text style={styles.label}>BID AMOUNT</Text>
-      <View style={[styles.amountRow, focused === 'amount' && styles.inputFocused]}>
-        <Text style={styles.currency}>$</Text>
-        <TextInput
-          style={styles.amountInput}
-          placeholder="0"
-          placeholderTextColor={colors.textTertiary}
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="numeric"
-          onFocus={() => setFocused('amount')}
-          onBlur={() => setFocused(null)}
+      <View style={{ marginHorizontal: 16, marginTop: 28, gap: 12 }}>
+        <Field icon="time" placeholder="Estimated hours, e.g. 3" value={estimatedHours} onChangeText={setEstimatedHours} keyboardType="numeric" suffix="hours" />
+        <Field
+          placeholder="Introduce yourself, explain your approach and mention similar jobs you've done…"
+          value={message}
+          onChangeText={setMessage}
+          multiline
         />
       </View>
 
-      <Text style={styles.label}>ESTIMATED HOURS</Text>
-      <TextInput
-        style={[styles.input, focused === 'hours' && styles.inputFocused]}
-        placeholder="e.g. 3"
-        placeholderTextColor={colors.textTertiary}
-        value={estimatedHours}
-        onChangeText={setEstimatedHours}
-        keyboardType="numeric"
-        onFocus={() => setFocused('hours')}
-        onBlur={() => setFocused(null)}
-      />
-
-      <Text style={styles.label}>MESSAGE TO CUSTOMER</Text>
-      <TextInput
-        style={[styles.input, styles.textArea, focused === 'msg' && styles.inputFocused]}
-        placeholder="Introduce yourself, describe your approach, mention relevant experience..."
-        placeholderTextColor={colors.textTertiary}
-        value={message}
-        onChangeText={setMessage}
-        multiline
-        textAlignVertical="top"
-        onFocus={() => setFocused('msg')}
-        onBlur={() => setFocused(null)}
-      />
-
-      {amount && parseFloat(amount) > 0 ? (
-        <View style={styles.earningsCard}>
-          <Text style={styles.earningsTitle}>ESTIMATED EARNINGS</Text>
-          <View style={styles.earningsRow}>
-            <Text style={styles.earningsLabel}>Your bid</Text>
-            <Text style={styles.earningsValue}>{`$${parseFloat(amount).toFixed(2)}`}</Text>
-          </View>
-          <View style={styles.earningsRow}>
-            <Text style={styles.earningsLabel}>{'Platform fee (12%)'}</Text>
-            <Text style={[styles.earningsValue, { color: colors.error }]}>{`-$${(parseFloat(amount) * 0.12).toFixed(2)}`}</Text>
-          </View>
-          <View style={styles.earningsDivider} />
-          <View style={styles.earningsRow}>
-            <Text style={[styles.earningsLabel, { fontWeight: '700', color: colors.text }]}>You'll receive</Text>
-            <Text style={[styles.earningsValue, { color: colors.accent, fontSize: 20 }]}>
-              {`$${(parseFloat(amount) * 0.88).toFixed(2)}`}
-            </Text>
-          </View>
-        </View>
+      {value > 0 ? (
+        <Card style={{ marginHorizontal: 16, marginTop: 20 }}>
+          <Text style={[type.footnote, { color: colors.textSecondary, fontWeight: '600', marginBottom: 4 }]}>ESTIMATED PAYOUT</Text>
+          <Line label="Your price" value={money(value, { decimals: 2 })} />
+          <Line label="Platform fee (12%)" value={`−${money(value * PLATFORM_FEE, { decimals: 2 })}`} color={colors.error} />
+          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.separator, marginVertical: 6 }} />
+          <Line label="You receive" value={money(value * (1 - PLATFORM_FEE), { decimals: 2 })} color={colors.success} bold />
+        </Card>
       ) : null}
-
-      <TouchableOpacity
-        style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
-        onPress={handleSubmit}
-        disabled={submitting}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.submitText}>{submitting ? 'Submitting...' : 'Submit Bid'}</Text>
-      </TouchableOpacity>
-    </ScrollView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 20, paddingBottom: 40 },
-
-  jobCard: {
-    backgroundColor: colors.white, padding: 18, borderRadius: radius.lg,
-    borderWidth: 1, borderColor: colors.border, marginBottom: 24, ...shadows.sm,
-  },
-  jobHeader: { flexDirection: 'row', marginBottom: 8 },
-  categoryBadge: { backgroundColor: colors.primaryBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full },
-  categoryText: { ...typography.caption, color: colors.primary, fontSize: 10 },
-  jobTitle: { ...typography.h3, marginBottom: 6 },
-  jobDesc: { ...typography.bodySmall, lineHeight: 20, marginBottom: 12 },
-  jobMeta: { flexDirection: 'row', gap: 16 },
-  jobMetaItem: {},
-  jobMetaLabel: { ...typography.caption, fontSize: 9, marginBottom: 2 },
-  jobMetaValue: { ...typography.body, fontSize: 14, fontWeight: '600' },
-
-  sectionTitle: { ...typography.h2, marginBottom: 16 },
-  label: { ...typography.caption, marginBottom: 8, marginTop: 16 },
-
-  input: {
-    backgroundColor: colors.white, padding: 16, borderRadius: radius.lg,
-    fontSize: 16, color: colors.text,
-    borderWidth: 1.5, borderColor: colors.border,
-  },
-  inputFocused: { borderColor: colors.primary, backgroundColor: colors.primaryBg },
-  textArea: { minHeight: 100, paddingTop: 16 },
-
-  amountRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.white, borderRadius: radius.lg,
-    borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: 16,
-  },
-  currency: { fontSize: 24, fontWeight: '700', color: colors.accent, marginRight: 8 },
-  amountInput: { flex: 1, paddingVertical: 16, fontSize: 28, fontWeight: '700', color: colors.text },
-
-  earningsCard: {
-    backgroundColor: colors.accentLight, padding: 18, borderRadius: radius.lg,
-    marginTop: 24, borderWidth: 1, borderColor: '#A7F3D0',
-  },
-  earningsTitle: { ...typography.caption, color: colors.accentDark, marginBottom: 12 },
-  earningsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  earningsLabel: { ...typography.bodySmall, fontSize: 14 },
-  earningsValue: { fontSize: 14, fontWeight: '600', color: colors.text },
-  earningsDivider: { height: 1, backgroundColor: '#A7F3D0', marginVertical: 8 },
-
-  submitBtn: {
-    backgroundColor: colors.accent, paddingVertical: 18,
-    borderRadius: radius.lg, alignItems: 'center', marginTop: 28, ...shadows.md,
-  },
-  submitText: { ...typography.button, color: '#fff' },
-});

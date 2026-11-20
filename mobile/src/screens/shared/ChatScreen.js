@@ -1,22 +1,54 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { io } from 'socket.io-client';
 import { setMessages, addMessage, markMessagesReadFrom } from '../../store/chatSlice';
 import api from '../../api/axios.instance';
 import { SERVER_URL } from '../../config';
-import { colors, radius, shadows, typography } from '../../theme';
+import Avatar from '../../components/Avatar';
+import { Screen, Tappable, EmptyState } from '../../components/ui';
+import { useTheme } from '../../context/ThemeContext';
+import { type } from '../../theme';
+
+function TypingBubble() {
+  const { colors } = useTheme();
+  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+
+  useEffect(() => {
+    const anims = dots.map((d, i) => Animated.loop(Animated.sequence([
+      Animated.delay(i * 150),
+      Animated.timing(d, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.timing(d, { toValue: 0, duration: 300, useNativeDriver: true }),
+      Animated.delay(300 - i * 150),
+    ])));
+    anims.forEach((a) => a.start());
+    return () => anims.forEach((a) => a.stop());
+  }, []);
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 4, alignSelf: 'flex-start', marginLeft: 52, marginTop: 4, backgroundColor: colors.bubbleTheirs, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12 }}>
+      {dots.map((d, i) => (
+        <Animated.View key={i} style={{
+          width: 7, height: 7, borderRadius: 4, backgroundColor: colors.textSecondary,
+          opacity: d.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+          transform: [{ translateY: d.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
+        }} />
+      ))}
+    </View>
+  );
+}
 
 export default function ChatScreen({ route }) {
   const { jobId } = route.params;
+  const { colors } = useTheme();
   const [input, setInput] = useState('');
   const [socket, setSocket] = useState(null);
   const [typing, setTyping] = useState(false);
   const { user, accessToken } = useSelector((state) => state.auth);
   const { messages } = useSelector((state) => state.chat);
   const dispatch = useDispatch();
-  const flatListRef = useRef();
+  const listRef = useRef();
 
   useEffect(() => {
     api.get(`/messages/${jobId}`).then(({ data }) => {
@@ -50,141 +82,88 @@ export default function ChatScreen({ route }) {
     if (socket && text.trim()) socket.emit('typing', { jobId });
   };
 
+  const other = messages.find((m) => m.sender_id !== user.id);
+  const lastMineIndex = messages.reduce((acc, m, i) => (m.sender_id === user.id ? i : acc), -1);
+
   const renderMessage = ({ item, index }) => {
     const isMe = item.sender_id === user.id;
-    const prevMsg = index > 0 ? messages[index - 1] : null;
-    const showAvatar = !isMe && (!prevMsg || prevMsg.sender_id !== item.sender_id);
+    const prev = messages[index - 1];
+    const next = messages[index + 1];
+    const firstOfGroup = !prev || prev.sender_id !== item.sender_id;
+    const lastOfGroup = !next || next.sender_id !== item.sender_id;
+    const time = new Date(item.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     return (
-      <View style={[styles.messageRow, isMe ? styles.messageRowRight : styles.messageRowLeft]}>
-        {!isMe && (
-          <View style={[styles.avatarMini, !showAvatar && { opacity: 0 }]}>
-            <Text style={styles.avatarMiniText}>{item.sender_name?.charAt(0)?.toUpperCase()}</Text>
-          </View>
-        )}
-        <View style={[styles.messageBubble, isMe ? styles.myMessage : styles.theirMessage]}>
-          {showAvatar && <Text style={styles.senderName}>{item.sender_name}</Text>}
-          <Text style={[styles.messageText, isMe && { color: '#fff' }]}>{item.content}</Text>
-          <View style={styles.metaRow}>
-            <Text style={[styles.timeText, isMe && { color: 'rgba(255,255,255,0.6)' }]}>
-              {new Date(item.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-            {isMe && (
-              <Ionicons
-                name={item.is_read ? 'checkmark-done' : 'checkmark'}
-                size={14}
-                color={item.is_read ? '#93C5FD' : 'rgba(255,255,255,0.6)'}
-                style={{ marginLeft: 4 }}
-              />
-            )}
+      <View style={{ paddingHorizontal: 12, marginTop: firstOfGroup ? 12 : 2 }}>
+        {!isMe && firstOfGroup ? (
+          <Text style={[type.caption, { color: colors.textSecondary, marginLeft: 52, marginBottom: 3 }]}>{item.sender_name}</Text>
+        ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+          {!isMe ? (
+            <View style={{ width: 32, marginRight: 8 }}>
+              {lastOfGroup ? <Avatar name={item.sender_name} size={32} /> : null}
+            </View>
+          ) : null}
+          <View style={{
+            maxWidth: '76%', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,
+            backgroundColor: isMe ? colors.primary : colors.bubbleTheirs,
+            ...(lastOfGroup ? (isMe ? { borderBottomRightRadius: 6 } : { borderBottomLeftRadius: 6 }) : null),
+          }}>
+            <Text style={[type.body, { color: isMe ? '#fff' : colors.text }]}>{item.content}</Text>
           </View>
         </View>
+        {lastOfGroup ? (
+          <Text style={[type.caption2, { color: colors.textTertiary, marginTop: 4, alignSelf: isMe ? 'flex-end' : 'flex-start', marginLeft: isMe ? 0 : 52, fontWeight: '500' }]}>
+            {isMe && index === lastMineIndex ? `${item.is_read ? 'Read' : 'Delivered'} · ${time}` : time}
+          </Text>
+        ) : null}
       </View>
     );
   };
 
+  const canSend = !!input.trim();
+
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderMessage}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-        contentContainerStyle={styles.messageList}
-        ListEmptyComponent={
-          <View style={styles.emptyChat}>
-            <Ionicons name="chatbubble-ellipses-outline" size={48} color={colors.textTertiary} />
-            <Text style={styles.emptyChatTitle}>Start the conversation</Text>
-            <Text style={styles.emptyChatSub}>Messages are private between you and the other party</Text>
+    <Screen
+      title={other?.sender_name || 'Messages'}
+      large={false}
+      scrollRef={listRef}
+      data={messages}
+      keyExtractor={(item) => item.id.toString()}
+      renderItem={renderMessage}
+      listProps={{
+        onContentSizeChange: () => listRef.current?.scrollToEnd?.({ animated: true }),
+        ListFooterComponent: typing ? <TypingBubble /> : null,
+        keyboardDismissMode: 'interactive',
+      }}
+      ListEmptyComponent={(
+        <EmptyState icon="chatbubbles" title="Say hello 👋" message="Messages are private between you and the other person on this job." style={{ marginTop: 40 }} />
+      )}
+      footer={(
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+          <View style={{ flex: 1, backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.separator, paddingHorizontal: 14, minHeight: 40, justifyContent: 'center' }}>
+            <TextInput
+              style={[type.body, { color: colors.text, maxHeight: 110, paddingVertical: 9, outlineStyle: 'none' }]}
+              placeholder="Message"
+              placeholderTextColor={colors.textTertiary}
+              value={input}
+              onChangeText={handleTyping}
+              multiline
+              maxLength={1000}
+              accessibilityLabel="Message"
+            />
           </View>
-        }
-      />
-      {typing && (
-        <View style={styles.typingBar}>
-          <Text style={styles.typingText}>Typing...</Text>
+          <Tappable
+            onPress={sendMessage}
+            disabled={!canSend}
+            scaleTo={0.85}
+            accessibilityLabel="Send message"
+            style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: canSend ? colors.primary : colors.fillStrong }}
+          >
+            <Ionicons name="arrow-up" size={22} color="#fff" />
+          </Tappable>
         </View>
       )}
-      <View style={styles.inputBar}>
-        <View style={styles.inputWrapper}>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Type a message..."
-            placeholderTextColor={colors.textTertiary}
-            value={input}
-            onChangeText={handleTyping}
-            multiline
-            maxLength={1000}
-          />
-        </View>
-        <TouchableOpacity
-          style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
-          onPress={sendMessage}
-          disabled={!input.trim()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="send" size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgAlt },
-
-  messageList: { padding: 16, paddingBottom: 8, flexGrow: 1 },
-
-  messageRow: { flexDirection: 'row', marginBottom: 6, alignItems: 'flex-end' },
-  messageRowLeft: { justifyContent: 'flex-start', marginRight: 48 },
-  messageRowRight: { justifyContent: 'flex-end', marginLeft: 48 },
-
-  avatarMini: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: colors.primaryLight, justifyContent: 'center', alignItems: 'center',
-    marginRight: 8,
-  },
-  avatarMiniText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-
-  messageBubble: { maxWidth: '85%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.lg },
-  myMessage: {
-    backgroundColor: colors.primary, borderBottomRightRadius: 4,
-    ...shadows.sm,
-  },
-  theirMessage: {
-    backgroundColor: colors.white, borderBottomLeftRadius: 4,
-    borderWidth: 1, borderColor: colors.border,
-  },
-
-  senderName: { ...typography.caption, fontSize: 10, color: colors.primary, marginBottom: 3 },
-  messageText: { fontSize: 15, lineHeight: 21, color: colors.text },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-end' },
-  timeText: { fontSize: 10, color: colors.textTertiary },
-
-  typingBar: { paddingHorizontal: 20, paddingVertical: 4 },
-  typingText: { ...typography.caption, fontSize: 11, color: colors.textSecondary, fontStyle: 'italic', textTransform: 'none' },
-
-  inputBar: {
-    flexDirection: 'row', padding: 12, paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border,
-    alignItems: 'flex-end', ...shadows.md,
-  },
-  inputWrapper: {
-    flex: 1, backgroundColor: colors.bgAlt, borderRadius: radius.xl,
-    borderWidth: 1, borderColor: colors.border, overflow: 'hidden',
-  },
-  textInput: {
-    paddingHorizontal: 18, paddingVertical: 10, fontSize: 15,
-    color: colors.text, maxHeight: 100,
-  },
-  sendBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center',
-    marginLeft: 10, ...shadows.sm,
-  },
-  sendBtnDisabled: { backgroundColor: colors.border },
-
-  emptyChat: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 60 },
-  emptyChatTitle: { ...typography.h3, marginTop: 16, marginBottom: 8 },
-  emptyChatSub: { ...typography.bodySmall, textAlign: 'center', lineHeight: 20 },
-});
