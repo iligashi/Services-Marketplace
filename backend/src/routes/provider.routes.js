@@ -5,6 +5,7 @@ const authorize = require('../middleware/role.middleware');
 const { findNearbyJobs } = require('../services/geo.service');
 const { getBadge, getFeeRate } = require('../services/reputation.service');
 const jobs = require('../controllers/job.controller');
+const { hasJobsFulltext, likeContains } = require('../services/search.service');
 
 router.use(authenticate, authorize('provider'));
 
@@ -106,23 +107,42 @@ router.get('/recommended-jobs', async (req, res, next) => {
       return res.json({ jobs, matched: false });
     }
 
-    // Boolean-mode fulltext over the skill keywords, plus category-name matching
     const cleaned = skills.map((s) => String(s).replace(/[+\-<>()~*"@]/g, '').trim()).filter(Boolean);
-    const booleanQuery = cleaned.map((w) => `${w.split(/\s+/)[0]}*`).join(' ');
     const catConds = cleaned.map(() => 'c.name LIKE ?').join(' OR ');
-    const catParams = cleaned.map((s) => `%${s}%`);
+    const catParams = cleaned.map((s) => likeContains(s));
 
-    const [jobs] = await db.query(
-      `SELECT j.*, c.name as category_name,
-              MATCH(j.title, j.description) AGAINST(? IN BOOLEAN MODE) as relevance
-       FROM jobs j
-       LEFT JOIN categories c ON j.category_id = c.id
-       WHERE j.status = 'open'
-         AND (MATCH(j.title, j.description) AGAINST(? IN BOOLEAN MODE) ${catConds ? 'OR ' + catConds : ''})
-       ORDER BY relevance DESC, j.created_at DESC
-       LIMIT 20`,
-      [booleanQuery, booleanQuery, ...catParams]
-    );
+    let jobs;
+    if (await hasJobsFulltext()) {
+      // Boolean-mode fulltext over the skill keywords, plus category-name matching
+      const booleanQuery = cleaned.map((w) => `${w.split(/\s+/)[0]}*`).join(' ');
+      [jobs] = await db.query(
+        `SELECT j.*, c.name as category_name,
+                MATCH(j.title, j.description) AGAINST(? IN BOOLEAN MODE) as relevance
+         FROM jobs j
+         LEFT JOIN categories c ON j.category_id = c.id
+         WHERE j.status = 'open'
+           AND (MATCH(j.title, j.description) AGAINST(? IN BOOLEAN MODE) ${catConds ? 'OR ' + catConds : ''})
+         ORDER BY relevance DESC, j.created_at DESC
+         LIMIT 20`,
+        [booleanQuery, booleanQuery, ...catParams]
+      );
+    } else {
+      // No full-text index: relevance is the number of skill keywords found
+      const kw = cleaned.map((w) => likeContains(w.split(/\s+/)[0]));
+      const hit = kw.map(() => '(j.title LIKE ? OR j.description LIKE ?)');
+      const hitParams = kw.flatMap((k) => [k, k]);
+      [jobs] = await db.query(
+        `SELECT j.*, c.name as category_name,
+                (${hit.map((h) => `(CASE WHEN ${h} THEN 1 ELSE 0 END)`).join(' + ')}) as relevance
+         FROM jobs j
+         LEFT JOIN categories c ON j.category_id = c.id
+         WHERE j.status = 'open'
+           AND (${hit.join(' OR ')} ${catConds ? 'OR ' + catConds : ''})
+         ORDER BY relevance DESC, j.created_at DESC
+         LIMIT 20`,
+        [...hitParams, ...hitParams, ...catParams]
+      );
+    }
 
     res.json({ jobs, matched: true, skills: cleaned });
   } catch (err) {
