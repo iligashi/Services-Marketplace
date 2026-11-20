@@ -79,14 +79,14 @@ Payouts go to each provider's **Stripe Connect** account. The platform keeps the
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/customer-home.png" width="220" alt="Customer home"><br><sub>Home</sub></td>
-    <td align="center"><img src="docs/screenshots/customer-post-job.png" width="220" alt="Post a job"><br><sub>Post a job</sub></td>
-    <td align="center"><img src="docs/screenshots/customer-my-jobs.png" width="220" alt="My jobs"><br><sub>My jobs</sub></td>
+    <td align="center"><img src="docs/screenshots/customer-home.png?v=2" width="220" alt="Customer home"><br><sub>Home</sub></td>
+    <td align="center"><img src="docs/screenshots/customer-post-job.png?v=2" width="220" alt="Post a job"><br><sub>Post a job</sub></td>
+    <td align="center"><img src="docs/screenshots/customer-my-jobs.png?v=2" width="220" alt="My jobs"><br><sub>My jobs</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/customer-job-detail.png" width="220" alt="Job details with progress timeline"><br><sub>Job details and progress</sub></td>
-    <td align="center"><img src="docs/screenshots/customer-bids.png" width="220" alt="Compare bids"><br><sub>Compare bids</sub></td>
-    <td align="center"><img src="docs/screenshots/mobile-login.png" width="220" alt="Sign in"><br><sub>Sign in</sub></td>
+    <td align="center"><img src="docs/screenshots/customer-job-detail.png?v=2" width="220" alt="Job details with progress timeline"><br><sub>Job details and progress</sub></td>
+    <td align="center"><img src="docs/screenshots/customer-bids.png?v=2" width="220" alt="Compare bids"><br><sub>Compare bids</sub></td>
+    <td align="center"><img src="docs/screenshots/mobile-login.png?v=2" width="220" alt="Sign in"><br><sub>Sign in</sub></td>
   </tr>
 </table>
 
@@ -94,14 +94,14 @@ Payouts go to each provider's **Stripe Connect** account. The platform keeps the
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/provider-dashboard.png" width="220" alt="Provider Today dashboard"><br><sub>Today</sub></td>
-    <td align="center"><img src="docs/screenshots/provider-browse.png" width="220" alt="Browse jobs"><br><sub>Browse jobs</sub></td>
-    <td align="center"><img src="docs/screenshots/provider-submit-bid.png" width="220" alt="Submit a bid"><br><sub>Submit a bid</sub></td>
+    <td align="center"><img src="docs/screenshots/provider-dashboard.png?v=2" width="220" alt="Provider Today dashboard"><br><sub>Today</sub></td>
+    <td align="center"><img src="docs/screenshots/provider-browse.png?v=2" width="220" alt="Browse jobs"><br><sub>Browse jobs</sub></td>
+    <td align="center"><img src="docs/screenshots/provider-submit-bid.png?v=2" width="220" alt="Submit a bid"><br><sub>Submit a bid</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/provider-my-bids.png" width="220" alt="My bids"><br><sub>My bids</sub></td>
-    <td align="center"><img src="docs/screenshots/chat.png" width="220" alt="Real-time chat"><br><sub>Real-time chat</sub></td>
-    <td align="center"><img src="docs/screenshots/provider-earnings.png" width="220" alt="Earnings"><br><sub>Earnings</sub></td>
+    <td align="center"><img src="docs/screenshots/provider-my-bids.png?v=2" width="220" alt="My bids"><br><sub>My bids</sub></td>
+    <td align="center"><img src="docs/screenshots/chat.png?v=2" width="220" alt="Real-time chat"><br><sub>Real-time chat</sub></td>
+    <td align="center"><img src="docs/screenshots/provider-earnings.png?v=2" width="220" alt="Earnings"><br><sub>Earnings</sub></td>
   </tr>
 </table>
 
