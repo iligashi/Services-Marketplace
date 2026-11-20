@@ -60,7 +60,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Static files
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/uploads', express.static(path.resolve(config.upload.dir)));
 
 // Routes
 app.use('/api/auth', require('./routes/auth.routes'));

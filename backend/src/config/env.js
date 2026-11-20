@@ -42,6 +42,13 @@ const trustProxy = (value) => {
   return /^\d+$/.test(value) ? Number(value) : value;
 };
 
+// Hosts injected by a platform (e.g. Render's `host` property) come without a
+// scheme; CORS origins need one.
+const origin = (value, fallback) => {
+  const v = (value || fallback).trim().replace(/\/+$/, '');
+  return /^https?:\/\//.test(v) ? v : `https://${v}`;
+};
+
 const jwtSecret = resolveSecret('JWT_SECRET');
 const jwtRefreshSecret = resolveSecret('JWT_REFRESH_SECRET');
 if (jwtSecret === jwtRefreshSecret) {
@@ -91,6 +98,6 @@ module.exports = {
   },
   trustProxy: trustProxy(process.env.TRUST_PROXY),
 
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:8081',
-  adminUrl: process.env.ADMIN_URL || 'http://localhost:3001',
+  clientUrl: origin(process.env.CLIENT_URL, 'http://localhost:8081'),
+  adminUrl: origin(process.env.ADMIN_URL, 'http://localhost:3001'),
 };

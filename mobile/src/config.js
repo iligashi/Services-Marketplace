@@ -1,11 +1,13 @@
 import { Platform } from 'react-native';
 
-// Backend host. Set in mobile/.env (Expo inlines EXPO_PUBLIC_* at build time):
-//   EXPO_PUBLIC_SERVER_URL      used on the web build (default http://localhost:3000)
-//   EXPO_PUBLIC_LAN_SERVER_URL  used on phones/emulators, e.g. http://192.168.0.10:3000
-export const SERVER_URL = Platform.OS === 'web'
-  ? process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:3000'
+// Backend host. Expo inlines EXPO_PUBLIC_* at build time:
+//   EXPO_PUBLIC_SERVER_URL      production API (set per profile in eas.json); used on every platform
+//   EXPO_PUBLIC_LAN_SERVER_URL  development only: your machine's LAN address for phones/emulators
+const DEV_SERVER_URL = Platform.OS === 'web'
+  ? 'http://localhost:3000'
   : process.env.EXPO_PUBLIC_LAN_SERVER_URL || 'http://192.168.0.127:3000';
+
+export const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || DEV_SERVER_URL;
 
 export const API_URL = `${SERVER_URL}/api`;
 

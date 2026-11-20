@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+// VITE_API_URL is a full base URL; VITE_API_HOST is a bare host injected by
+// the hosting platform (Render), served over https.
+const { VITE_API_URL, VITE_API_HOST } = import.meta.env;
+const baseURL = VITE_API_URL || (VITE_API_HOST ? `https://${VITE_API_HOST}/api` : 'http://localhost:3000/api');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  baseURL,
   timeout: 10000,
 });
 

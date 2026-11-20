@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "backgroundColor": "#0984e3"
     },
@@ -14,7 +14,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.marketplace.services"
+      "bundleIdentifier": "com.marketplace.services",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
