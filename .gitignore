@@ -5,3 +5,6 @@ backend/uploads/
 backend/logs/
 admin/dist/
 mobile/.expo/
+
+# Local env overrides
+.env*.local

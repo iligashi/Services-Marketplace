@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/axios.instance';
+import { clearPushToken } from '../utils/push';
 
 const AUTH_STORAGE_KEY = '@auth_state';
 
@@ -55,6 +56,16 @@ export const fetchProfile = createAsyncThunk('auth/profile', async (_, { rejectW
   } catch (err) {
     return rejectWithValue(err.response?.data?.error || 'Failed to fetch profile');
   }
+});
+
+// Revoke the session on the server (refresh token + push token) before
+// clearing it locally. Local logout happens even if the server is unreachable.
+export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { dispatch }) => {
+  await clearPushToken();
+  try {
+    await api.post('/auth/logout');
+  } catch {}
+  dispatch(logout());
 });
 
 const authSlice = createSlice({

@@ -5,10 +5,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
-import { fetchProfile, logout } from '../../store/authSlice';
+import { fetchProfile, logoutUser } from '../../store/authSlice';
+import { confirmAction } from '../../utils/dialogs';
 import api from '../../api/axios.instance';
 import { useTheme } from '../../context/ThemeContext';
-import { clearPushToken } from '../../utils/push';
 import { radius, shadows, typography } from '../../theme';
 
 function makeStyles(colors) {
@@ -383,11 +383,10 @@ export default function ProfileScreen() {
       {/* Log Out */}
       <TouchableOpacity
         style={styles.logoutBtn}
-        onPress={() => {
-          Alert.alert('Log Out', 'Are you sure you want to log out?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Log Out', style: 'destructive', onPress: async () => { await clearPushToken(); dispatch(logout()); } },
-          ]);
+        onPress={async () => {
+          if (await confirmAction('Log Out', 'Are you sure you want to log out?', { confirmText: 'Log Out', destructive: true })) {
+            dispatch(logoutUser());
+          }
         }}
         activeOpacity={0.8}
       >

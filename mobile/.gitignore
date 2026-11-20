@@ -9,3 +9,6 @@ web-build/
 *.mobileprovision
 *.orig.*
 npm-debug.*
+
+# local env files
+.env*.local

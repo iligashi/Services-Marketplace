@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert, RefreshControl, Platform } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { getBidsForJob, acceptBid, rejectBid } from '../../api/jobs.api';
 import BidCard from '../../components/BidCard';
 import { colors, typography } from '../../theme';
+import { confirmAction } from '../../utils/dialogs';
 
 export default function BidsScreen({ route, navigation }) {
   const { jobId } = route.params;
@@ -28,15 +29,9 @@ export default function BidsScreen({ route, navigation }) {
     }
   };
 
-  const handleAccept = (bidId) => {
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm('This will assign the job to this provider. Other bids will be declined. Continue?');
-      if (confirmed) doAccept(bidId);
-    } else {
-      Alert.alert('Accept Bid', 'This will assign the job to this provider. Other bids will be declined.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Accept', style: 'default', onPress: () => doAccept(bidId) },
-      ]);
+  const handleAccept = async (bidId) => {
+    if (await confirmAction('Accept Bid', 'This will assign the job to this provider. Other bids will be declined.', { confirmText: 'Accept' })) {
+      doAccept(bidId);
     }
   };
 
