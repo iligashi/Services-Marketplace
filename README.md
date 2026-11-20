@@ -94,7 +94,7 @@ Payouts go to each provider's **Stripe Connect** account. The platform keeps the
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/provider-dashboard.png" width="220" alt="Provider dashboard"><br><sub>Dashboard</sub></td>
+    <td align="center"><img src="docs/screenshots/provider-dashboard.png" width="220" alt="Provider Today dashboard"><br><sub>Today</sub></td>
     <td align="center"><img src="docs/screenshots/provider-browse.png" width="220" alt="Browse jobs"><br><sub>Browse jobs</sub></td>
     <td align="center"><img src="docs/screenshots/provider-submit-bid.png" width="220" alt="Submit a bid"><br><sub>Submit a bid</sub></td>
   </tr>
