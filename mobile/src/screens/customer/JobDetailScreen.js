@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { getJobById } from '../../api/jobs.api';
 import { confirmCompletion } from '../../api/payments.api';
 import { colors, radius, shadows, typography, statusConfig } from '../../theme';
 import JobStatusTimeline from '../../components/JobStatusTimeline';
+import { mediaUrl } from '../../config';
+import { confirmAction } from '../../utils/dialogs';
 
-const BASE_URL = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://192.168.0.127:3000';
 
 export default function JobDetailScreen({ route, navigation }) {
   const { jobId } = route.params;
@@ -26,16 +27,9 @@ export default function JobDetailScreen({ route, navigation }) {
     catch (err) { Alert.alert('Error', err.response?.data?.error || 'Failed'); }
   };
 
-  const handleConfirmCompletion = () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('This will mark the job as complete and release payment to the provider. Are you sure?')) {
-        doConfirmCompletion();
-      }
-    } else {
-      Alert.alert('Confirm Completion', 'This will release payment to the provider. Are you sure?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Yes, release payment', onPress: doConfirmCompletion },
-      ]);
+  const handleConfirmCompletion = async () => {
+    if (await confirmAction('Confirm Completion', 'This will mark the job as complete and release payment to the provider. Are you sure?', { confirmText: 'Yes, release payment' })) {
+      doConfirmCompletion();
     }
   };
 
@@ -133,7 +127,7 @@ export default function JobDetailScreen({ route, navigation }) {
           <Text style={styles.sectionTitle}>{'Photos'}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {photos.map((uri, i) => (
-              <Image key={i} source={{ uri: `${BASE_URL}${uri}` }} style={styles.photo} />
+              <Image key={i} source={{ uri: mediaUrl(uri) }} style={styles.photo} />
             ))}
           </ScrollView>
         </View>

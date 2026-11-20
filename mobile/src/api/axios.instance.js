@@ -1,13 +1,9 @@
 import axios from 'axios';
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { store } from '../store/store';
 import { logout, setTokens } from '../store/authSlice';
 
-// Web uses localhost, mobile uses LAN IP to reach the backend
-const API_URL = Platform.OS === 'web'
-  ? 'http://localhost:3000/api'
-  : 'http://192.168.0.127:3000/api';
+import { API_URL } from '../config';
 
 const api = axios.create({
   baseURL: API_URL,
