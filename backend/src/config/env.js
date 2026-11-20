@@ -29,6 +29,19 @@ function resolveSecret(name) {
   );
 }
 
+const positiveInt = (value, fallback) => {
+  const n = parseInt(value, 10);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+};
+
+// Express "trust proxy": the number of proxies in front of the API (e.g. 1
+// behind Render/Railway/nginx), or a named range like "loopback". Without it,
+// behind a proxy every client shares the proxy's IP and one rate-limit bucket.
+const trustProxy = (value) => {
+  if (!value) return false;
+  return /^\d+$/.test(value) ? Number(value) : value;
+};
+
 const jwtSecret = resolveSecret('JWT_SECRET');
 const jwtRefreshSecret = resolveSecret('JWT_REFRESH_SECRET');
 if (jwtSecret === jwtRefreshSecret) {
@@ -66,6 +79,17 @@ module.exports = {
   },
 
   redisUrl: process.env.REDIS_URL || (process.env.REDIS_HOST ? `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}` : null),
+
+  // Per-IP request limits per window. The app polls notifications, so the
+  // global limit must leave room for normal use; auth covers credential
+  // endpoints only (login, register, token refresh).
+  rateLimit: {
+    windowMs: positiveInt(process.env.RATE_LIMIT_WINDOW_MINUTES, 15) * 60 * 1000,
+    globalMax: positiveInt(process.env.RATE_LIMIT_GLOBAL_MAX, 1000),
+    authMax: positiveInt(process.env.RATE_LIMIT_AUTH_MAX, 20),
+    paymentsMax: positiveInt(process.env.RATE_LIMIT_PAYMENTS_MAX, 60),
+  },
+  trustProxy: trustProxy(process.env.TRUST_PROXY),
 
   clientUrl: process.env.CLIENT_URL || 'http://localhost:8081',
   adminUrl: process.env.ADMIN_URL || 'http://localhost:3001',
