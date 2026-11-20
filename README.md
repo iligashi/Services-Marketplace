@@ -447,6 +447,24 @@ npx eas-cli submit --platform android --latest
 
 Publishing needs an Apple Developer Program membership and a Google Play developer account.
 
+#### Try it in Expo Go without a store build (free)
+
+The app is published with [EAS Update](https://docs.expo.dev/eas-update/introduction/) to the `production` channel, which Expo Go can open at any time (sign in to Expo Go with an account that is a member of the Expo project):
+
+```
+exp://u.expo.dev/b67a27a8-ac17-43ae-be4e-d1846d5d6202?channel-name=production
+```
+
+To publish a new version (`--no-bytecode` because the Hermes compiler does not run on every Windows setup):
+
+```bash
+cd mobile
+EXPO_PUBLIC_SERVER_URL=https://marketplace-api-b0sd.onrender.com npx expo export --platform ios --no-bytecode --output-dir dist
+npx eas-cli update --branch production --platform ios --skip-bundler --input-dir dist --message "describe the change"
+```
+
+`runtimeVersion` uses the `sdkVersion` policy so Expo Go can load these updates.
+
 ---
 
 ## Configuration

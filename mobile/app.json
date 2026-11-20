@@ -34,6 +34,18 @@
           "backgroundColor": "#0984e3"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b67a27a8-ac17-43ae-be4e-d1846d5d6202"
+      }
+    },
+    "owner": "ilaz",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b67a27a8-ac17-43ae-be4e-d1846d5d6202"
+    }
   }
 }
